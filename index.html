@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GEN Shortage Control Panel</title>
+<style>
+:root {
+  --bg: #f4f4f1; --surface: #fcfcfb; --surface-2: #f0efec; --border: #e2e1dc; --hover: #ebeae6;
+  --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #7a7974; --accent: #2a78d6; --accent-ink: #1c5cab; --accent-soft: #e3eefb;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --shadow: 0 1px 2px rgba(0,0,0,.05); --overlay: rgba(20,20,18,.45);
+  --radius: 12px;
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121211; --surface: #1a1a19; --surface-2: #242422; --border: #33332f; --hover: #2a2a27;
+    --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8e8d85; --accent: #3987e5; --accent-ink: #86b6ef; --accent-soft: #1d2c40;
+    --shadow: none; --overlay: rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121211; --surface: #1a1a19; --surface-2: #242422; --border: #33332f; --hover: #2a2a27;
+  --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8e8d85; --accent: #3987e5; --accent-ink: #86b6ef; --accent-soft: #1d2c40;
+  --shadow: none; --overlay: rgba(0,0,0,.6);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 18px 16px 48px; }
+button, select, input, textarea { font: inherit; color: var(--ink); }
+button { cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; }
+button:hover { background: var(--hover); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.primary:hover { filter: brightness(1.07); }
+button.link { border: none; background: none; color: var(--accent-ink); padding: 2px 4px; }
+input[type="search"], input[type="text"], input[type="date"], textarea { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.muted { color: var(--ink-3); }
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.top h1 { font-size: 21px; margin: 0; }
+.asof { color: var(--ink-2); font-size: 13px; }
+.asof .conf { color: var(--critical); font-weight: 600; margin-left: 6px; }
+.top-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+details.menu { position: relative; }
+details.menu > summary { list-style: none; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; }
+details.menu > summary::-webkit-details-marker { display: none; }
+details.menu[open] > summary { background: var(--hover); }
+.menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 260px; padding: 6px; display: grid; }
+.menu-list button { border: none; text-align: left; background: none; }
+.menu-list button:hover { background: var(--hover); }
+
+/* KPI cards */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 12px; margin-bottom: 14px; }
+.kpi { text-align: left; padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); position: relative; }
+.kpi:hover { background: var(--hover); }
+.kpi[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.kpi.dim { opacity: .45; }
+.kpi .lab { display: flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.kpi .val { font-size: 30px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.kpi .sub { color: var(--ink-3); font-size: 12px; min-height: 18px; }
+.ico { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex: none; line-height: 1; }
+.ico.red { background: var(--critical); } .ico.orange { background: var(--serious); }
+.ico.yellow { background: var(--warning); color: #0b0b0b; } .ico.green { background: var(--good); }
+.ico.gray { background: var(--ink-3); }
+
+/* overview grid */
+.grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+@media (max-width: 920px) { .grid { grid-template-columns: 1fr; } }
+.panel-pad { padding: 14px 16px; }
+h2 { font-size: 15px; margin: 0 0 8px; }
+h2 .muted { font-weight: 400; font-size: 13px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+#chart { width: 100%; height: 230px; display: block; }
+#chart .bar { cursor: pointer; }
+#chart .bar.dim rect.seg { opacity: .3; }
+.axis text { fill: var(--ink-3); font-size: 11px; }
+.axis line { stroke: var(--border); }
+.hbars { display: grid; gap: 6px; margin-bottom: 14px; }
+.hbar { display: grid; grid-template-columns: 112px 1fr 48px; gap: 8px; align-items: center; border: none; background: none; padding: 3px 4px; border-radius: 6px; text-align: left; }
+.hbar:hover { background: var(--hover); }
+.hbar .track { height: 12px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.hbar .track, .hbar .fill { display: block; }
+.hbar .fill { height: 100%; border-radius: 3px; background: var(--accent); }
+.hbar .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.hbar[aria-pressed="true"] { background: var(--accent-soft); }
+.hbar.dim { opacity: .4; }
+.tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.18); display: none; z-index: 60; min-width: 160px; }
+.tip b { display: block; margin-bottom: 4px; }
+.tip .row { display: flex; justify-content: space-between; gap: 12px; }
+
+/* table */
+.tbl-card { padding: 12px 14px 14px; }
+.tbl-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+.tabs { display: flex; gap: 2px; background: var(--surface-2); border-radius: 9px; padding: 3px; }
+.tab { border: none; background: none; padding: 6px 12px; border-radius: 7px; color: var(--ink-2); }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
+.tbl-head .search { flex: 1 1 220px; }
+.tbl-head .search input { width: 100%; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 28px; margin-bottom: 8px; font-size: 13px; }
+.chip { display: inline-flex; gap: 6px; align-items: center; background: var(--accent-soft); color: var(--ink); border-radius: 999px; padding: 2px 4px 2px 10px; border: none; }
+.chip b { font-weight: 600; }
+.chip .x { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; align-items: center; justify-content: center; }
+.chip:hover .x { background: var(--hover); }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { background: var(--surface-2); color: var(--ink-2); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; }
+th[aria-sort="ascending"]::after { content: " ▲"; font-size: 10px; }
+th[aria-sort="descending"]::after { content: " ▼"; font-size: 10px; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--hover); }
+tbody tr.sel { background: var(--accent-soft); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.late { color: var(--critical); }
+.badge { display: inline-flex; gap: 6px; align-items: center; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); }
+.pill.High { border-color: var(--critical); color: var(--critical); }
+.pill.Medium { border-color: var(--warning); color: var(--ink); }
+.pill.Low { border-color: var(--good); color: var(--good); }
+.tag { display: inline-block; font-size: 11.5px; padding: 0 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); margin-right: 3px; }
+.pager { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 10px; color: var(--ink-2); font-size: 13px; flex-wrap: wrap; }
+
+/* drawer */
+.scrim { position: fixed; inset: 0; background: var(--overlay); z-index: 40; display: none; }
+.scrim.on { display: block; }
+.drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(520px, 100%); background: var(--surface); border-left: 1px solid var(--border); z-index: 50; transform: translateX(100%); transition: transform .18s ease; display: flex; flex-direction: column; }
+.drawer.on { transform: none; }
+.drawer header { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.drawer header h3 { margin: 0; font-size: 20px; }
+.drawer .body { overflow-y: auto; padding: 14px 18px 30px; flex: 1; }
+.drawer section { margin-bottom: 18px; }
+.drawer h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); }
+.why { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; font-size: 13px; }
+.facts div span { display: block; color: var(--ink-3); font-size: 12px; }
+.drivers { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; font-size: 13px; }
+.drivers li { display: flex; gap: 8px; align-items: center; }
+.arrow { font-weight: 700; width: 16px; text-align: center; }
+.arrow.up { color: var(--critical); } .arrow.down { color: var(--good); }
+.opt { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; margin-bottom: 8px; }
+.opt.rec { border-color: var(--accent); }
+.opt.chosen { border-color: var(--good); box-shadow: 0 0 0 1px var(--good) inset; }
+.opt .meta { color: var(--ink-2); font-size: 12.5px; grid-column: 1 / -1; }
+.opt .flag { font-size: 11.5px; font-weight: 600; color: var(--accent-ink); }
+.taglist { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tagbtn { border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+.tagbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.addtag { display: flex; gap: 6px; margin-bottom: 8px; }
+.addtag input { flex: 1; }
+textarea { width: 100%; min-height: 70px; resize: vertical; }
+.saved { font-size: 12px; color: var(--ink-3); min-height: 18px; }
+
+/* modals */
+.modal { position: fixed; inset: 0; z-index: 70; display: none; align-items: center; justify-content: center; padding: 16px; background: var(--overlay); }
+.modal.on { display: flex; }
+.modal .box { background: var(--surface); border-radius: 14px; border: 1px solid var(--border); width: min(760px, 100%); max-height: 92vh; display: flex; flex-direction: column; }
+.modal .box.wide { width: min(1000px, 100%); }
+.modal header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.modal header h3 { margin: 0; font-size: 18px; }
+.modal .content { padding: 16px 20px; overflow-y: auto; }
+.modal footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.drop { display: block; border: 2px dashed var(--border); border-radius: 12px; padding: 26px 16px; text-align: center; color: var(--ink-2); cursor: pointer; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop b { color: var(--ink); }
+.srcs { width: 100%; margin-top: 14px; font-size: 13px; }
+.srcs td, .srcs th { white-space: normal; cursor: default; }
+.msg { margin-top: 10px; font-size: 13px; }
+.msg.err { color: var(--critical); }
+.guide { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 18px; }
+@media (max-width: 720px) { .guide { grid-template-columns: 1fr; } .guide nav { display: none; } }
+.guide nav a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 8px; border-radius: 6px; font-size: 13px; }
+.guide nav a:hover { background: var(--hover); }
+.guide h3 { font-size: 16px; margin: 22px 0 6px; }
+.guide h3:first-child { margin-top: 0; }
+.guide p, .guide li { color: var(--ink-2); }
+.guide table { margin: 8px 0; }
+.guide td, .guide th { white-space: normal; cursor: default; }
+.guide code { background: var(--surface-2); border-radius: 4px; padding: 1px 5px; }
+.steps { counter-reset: s; list-style: none; padding: 0; }
+.steps li { counter-increment: s; position: relative; padding-left: 34px; margin-bottom: 10px; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+.err-banner { display: none; background: var(--critical); color: #fff; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 90; display: none; }
+footer.foot { color: var(--ink-3); font-size: 12px; margin-top: 16px; }
+.empty { padding: 40px 24px; text-align: center; max-width: 760px; margin: 30px auto; }
+.empty .big { font-size: 40px; line-height: 1; margin-bottom: 10px; }
+.empty h2 { font-size: 20px; margin-bottom: 6px; }
+.empty p { color: var(--ink-2); margin: 6px 0 18px; }
+.empty ul { text-align: left; display: inline-block; margin: 0 0 20px; padding-left: 20px; color: var(--ink-2); }
+.empty li { margin-bottom: 4px; }
+.missing { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="err-banner" id="err"></div>
+  <header class="top">
+    <div>
+      <h1>GEN Shortage Control Panel</h1>
+      <div class="asof">Data as of <b id="asof">—</b> · <span id="origin"></span> · <span class="muted">🔒 your files never leave this browser</span></div>
+    </div>
+    <div class="top-actions">
+      <button class="primary" id="btn-import" type="button">⬆ Import data</button>
+      <button id="btn-guide" type="button">? User guide</button>
+      <details class="menu" id="menu-export">
+        <summary>⬇ Export</summary>
+        <div class="menu-list card">
+          <button type="button" id="x-csv">Current table view (.csv)</button>
+          <button type="button" id="x-actions">My tags &amp; GEN selections (.json)</button>
+          <button type="button" id="i-actions">Load tags &amp; GEN selections…</button>
+        </div>
+      </details>
+      <button id="btn-theme" type="button" aria-label="Toggle light or dark theme">◐</button>
+      <input type="file" id="f-actions" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <section class="card empty" id="empty">
+    <div class="big">⬆</div>
+    <h2>Load your data to get started</h2>
+    <p>The panel stays empty until you import the latest Excel exports. Files are read inside this browser only – nothing is uploaded.</p>
+    <ul>
+      <li><b>All Orders Report</b> – <i>required</i></li>
+      <li><b>TAD Report</b> – needed for “In stock” and substitute GENs</li>
+      <li><b>genforecast</b> – needed for GEN supplier, configuration matching and delay risk by supplier</li>
+      <li><b>Gen Swap Summary</b> – needed for “GEN lent out” and open swap loops</li>
+    </ul>
+    <div><button type="button" class="primary" id="empty-import">⬆ Import data</button> <button type="button" id="empty-guide">? Read the user guide</button></div>
+  </section>
+
+  <div id="dash" hidden>
+  <div class="missing" id="missing" hidden></div>
+  <section class="kpis" id="kpis" aria-label="Key numbers (click to filter)"></section>
+
+  <section class="grid">
+    <div class="card panel-pad">
+      <h2>Planned starts – next 8 weeks <span class="muted">· click a bar to filter</span></h2>
+      <div class="legend" id="legend"></div>
+      <svg id="chart" role="img" aria-label="Orders by planned start week and GEN status"></svg>
+    </div>
+    <div class="card panel-pad">
+      <h2>Delay risk <span class="muted">· click to filter</span></h2>
+      <div class="hbars" id="riskbars"></div>
+      <h2>GEN supplier</h2>
+      <div class="hbars" id="supbars"></div>
+    </div>
+  </section>
+
+  <section class="card tbl-card">
+    <div class="tbl-head">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-view="orders" id="tab-orders">Orders</button>
+        <button class="tab" role="tab" aria-selected="false" data-view="loops" id="tab-loops">Open swap loops</button>
+      </div>
+      <div class="search"><input type="search" id="q" placeholder="Search ESO, serial, engine, tag…" aria-label="Search"></div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="tbl-wrap"><table id="tbl"></table></div>
+    <div class="pager" id="pager"></div>
+  </section>
+  </div>
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Order details" aria-hidden="true">
+  <header><div id="dr-title"></div><button type="button" id="dr-close" aria-label="Close">✕</button></header>
+  <div class="body" id="dr-body"></div>
+</aside>
+
+<div class="modal" id="m-import" role="dialog" aria-modal="true" aria-labelledby="imp-h">
+  <div class="box">
+    <header><h3 id="imp-h">Import data</h3><button type="button" class="m-close" aria-label="Close">✕</button></header>
+    <div class="content">
+      <label class="drop" id="drop" for="f-xlsx">
+        <div style="font-size:26px">⬆</div>
+        <b>Drop the Excel exports here</b> or click to choose files<br>
+        <span class="muted">All Orders · genforecast · TAD Report · Gen Swap Summary (any order, one or all four)</span>
+      </label>
+      <input type="file" id="f-xlsx" accept=".xlsx" multiple hidden>
+      <table class="srcs"><thead><tr><th>Data source</th><th>Status</th><th>Detected</th></tr></thead><tbody id="imp-srcs"></tbody></table>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label for="imp-asof"><b>Data as-of date</b></label>
+        <input type="date" id="imp-asof">
+        <span class="muted">Auto-filled from the latest date in the files. Day counts are measured from this date.</span>
+      </div>
+      <div class="msg" id="imp-msg"></div>
+      <p class="muted" style="font-size:12.5px;margin-bottom:0">Files are read inside this browser only. Nothing is uploaded anywhere.</p>
+    </div>
+    <footer><button type="button" id="imp-reset" style="margin-right:auto">🗑 Clear all data</button><button type="button" class="m-close">Cancel</button><button type="button" class="primary" id="imp-apply" disabled>Apply</button></footer>
+  </div>
+</div>
+
+<div class="modal" id="m-guide" role="dialog" aria-modal="true" aria-labelledby="guide-h">
+  <div class="box wide">
+    <header><h3 id="guide-h">User guide</h3><button type="button" class="m-close" aria-label="Close">✕</button></header>
+    <div class="content"><div class="guide" id="guide"></div></div>
+  </div>
+</div>
+
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="toast" id="toast" role="status"></div>
+<script type="application/json" id="data">{"raw": null, "risk": null}</script>
+<script type="application/json" id="computed"></script>
+<script>
+(function () {
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => Number(n).toLocaleString("en-US");
+window.addEventListener("error", (e) => { const b = $("#err"); b.style.display = "block"; b.textContent = "Something went wrong: " + e.message; document.body.dataset.error = e.message; });
+
+// ============================================================ constants
+const PARAMS = { horizonDays: 56, nearDays: 14, slackDays: 30, stuckDays: 30 };
+const ST = {
+  red: { label: "Short of GEN", icon: "!", color: "var(--critical)" },
+  orange: { label: "GEN lent out", icon: "↻", color: "var(--serious)" },
+  yellow: { label: "In transit", icon: "◷", color: "var(--warning)" },
+  green: { label: "In stock", icon: "✓", color: "var(--good)" },
+};
+const ST_ORDER = ["red", "orange", "yellow", "green"];
+const URG = { urgent: { label: "Urgent", cls: "red", icon: "!" }, watch: { label: "Watch", cls: "yellow", icon: "◷" },
+  check: { label: "Check status", cls: "gray", icon: "?" }, ok: { label: "OK", cls: "green", icon: "✓" } };
+const SOURCE = {
+  idle: { label: "Idle stock", note: "No open order owns this GEN", rank: 0 },
+  owner_open: { label: "Borrow from later order", note: "Owner starts later – creates a new swap loop", rank: 1 },
+  owner_stuck: { label: "Held by overdue order", note: "Owner is 30+ days overdue and not started – confirm it is on hold first", rank: 2 },
+};
+const PRESET_TAGS = ["Expedite supplier", "Swap planned", "Waiting on SPE", "Engine not ready", "Customer priority", "Resolved"];
+const FEATURE_LABEL = { supplier: "GEN supplier", Type: "Package type", SLS_MDL: "Engine model", Prod: "Product line", FUEL: "Fuel", OUTPLANT: "Outside plant", AC: "AC flag", CYL: "Cylinders" };
+const RISK_FIELD = { supplier: "sup", Type: "type", SLS_MDL: "mdl", Prod: "prod", FUEL: "fuel", OUTPLANT: "outplant", AC: "ac" };
+const SERIAL_RE = /[A-Z0-9]{3}\d{5}/;
+const SPECS = {
+  orders: { label: "All Orders Report", hint: "Sheet with ESO, SCH_STRT_DT, STRT_DT, GEN, Prod…",
+    required: ["eso", "schstrtdt", "strtdt", "gen", "prod"],
+    cols: { eso: "eso", sch: "schstrtdt", strt: "strtdt", gen: "gen", eta: "geneta", prod: "prod", fuel: "fuel", mdl: "slsmdl", cyl: "cyl", type: "type", outplant: "outplant", ac: "ac" } },
+  genforecast: { label: "genforecast", hint: "Sheet with Supplier Code, ESO, Basic Arrangement, Group Number, Part/Attach Number",
+    required: ["suppliercode", "eso", "basicarrangement", "groupnumber", "partattachnumber"],
+    cols: { eso: "eso", grp: "groupnumber", sup: "suppliercode", supname: "suppliername", part: "partattachnumber" } },
+  tad: { label: "TAD Report", hint: "Generator inventory (sheet with ESO, Serial #, Arrangement, Receipt Date)",
+    required: ["eso", "serial", "arrangement", "receiptdate"], cols: { eso: "eso", serial: "serial", arr: "arrangement", receipt: "receiptdate" } },
+  swaps: { label: "Gen Swap Summary", hint: "Swap log (sheet with Date, ESO, Original Serial #, New Serial #, Swap Loop)",
+
+    required: ["date", "eso", "originalserial", "newserial", "swaploop"], cols: { date: "date", eso: "eso", orig: "originalserial", new: "newserial", loop: "swaploop" } },
+};
+
+// ============================================================ dates
+const dayNum = (iso) => { if (!iso) return null; const [y, m, d] = iso.split("-").map(Number); return Date.UTC(y, m - 1, d) / 864e5; };
+const isoOf = (dn) => new Date(dn * 864e5).toISOString().slice(0, 10);
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtDate = (iso, yr = true) => { if (!iso) return "—"; const [y, m, d] = iso.split("-").map(Number); return `${MON[m - 1]} ${d}${yr ? ", " + y : ""}`; };
+function toISO(v) {
+  if (v == null || v === "") return null;
+  const s = String(v).trim();
+  if (/^-?\d+(\.\d+)?$/.test(s)) { const n = Math.floor(+s); return n > 1000 ? isoOf(n - 25569) : null; }
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) { const y = m[3].length === 2 ? 2000 + +m[3] : +m[3]; return isoOf(Date.UTC(y, +m[1] - 1, +m[2]) / 864e5); }
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(s); return isNaN(d) ? null : d.toISOString().slice(0, 10);
+}
+const daysText = (d) => d < 0 ? `${-d} d late` : d === 0 ? "today" : `in ${d} d`;
+
+// ============================================================ minimal .xlsx reader (offline, no libraries)
+const XML_ENT = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+const unxml = (s) => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) => e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : +e.slice(1)) : (XML_ENT[e] ?? m));
+function zipEntries(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("not a valid .xlsx file");
+  const n = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true);
+  const td = new TextDecoder(), map = new Map();
+  for (let k = 0; k < n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("corrupt .xlsx (zip directory)");
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), loff = dv.getUint32(p + 42, true);
+    if (csize === 0xffffffff) throw new Error("file too large (ZIP64) – save it again from Excel");
+    map.set(td.decode(u8.subarray(p + 46, p + 46 + nlen)), { method, csize, loff });
+    p += 46 + nlen + xlen + clen;
+  }
+  return map;
+}
+async function entryText(u8, e, stop) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const start = e.loff + 30 + dv.getUint16(e.loff + 26, true) + dv.getUint16(e.loff + 28, true);
+  const data = u8.subarray(start, start + e.csize);
+  if (e.method === 0) return new TextDecoder().decode(data);
+  const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  const dec = new TextDecoder(); const parts = []; let len = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const t = dec.decode(value, { stream: true }); parts.push(t); len += t.length;
+    if (stop && len > 20000 && stop(parts.join(""))) { try { await reader.cancel(); } catch (_) {} break; }
+  }
+  return parts.join("");
+}
+const colIndex = (ref) => { let n = 0; for (const ch of ref) { const c = ch.charCodeAt(0); if (c < 65 || c > 90) break; n = n * 26 + c - 64; } return n - 1; };
+function parseRows(xml, sst, maxRows = Infinity) {
+  const rows = [];
+  const rowRe = /<(?:\w+:)?row\b[^>]*?(?:\/>|>([\s\S]*?)<\/(?:\w+:)?row>)/g;
+  const cellRe = /<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g;
+  let rm;
+  while ((rm = rowRe.exec(xml)) && rows.length < maxRows) {
+    const row = []; const body = rm[1] || ""; let cm, seq = 0;
+    cellRe.lastIndex = 0;
+    while ((cm = cellRe.exec(body))) {
+      const a = cm[1], inner = cm[2] || "";
+      const r = a.match(/\br="([A-Z]+)\d*"/); const ci = r ? colIndex(r[1]) : seq; seq = ci + 1;
+      const t = (a.match(/\bt="(\w+)"/) || [])[1];
+      let v = "";
+      if (t === "inlineStr") v = [...inner.matchAll(/<(?:\w+:)?t\b[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map((x) => unxml(x[1])).join("");
+      else { const vm = inner.match(/<(?:\w+:)?v>([\s\S]*?)<\/(?:\w+:)?v>/); v = vm ? vm[1] : ""; if (t === "s") v = sst[+v] ?? ""; else if (t === "b") v = v === "1" ? "TRUE" : "FALSE"; else v = unxml(v); }
+      row[ci] = v;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+async function openWorkbook(file) {
+  const u8 = new Uint8Array(await file.arrayBuffer());
+  const zip = zipEntries(u8);
+  const get = async (name, stop) => zip.has(name) ? entryText(u8, zip.get(name), stop) : null;
+  const wbx = await get("xl/workbook.xml"); if (!wbx) throw new Error("not an Excel workbook");
+  const rels = (await get("xl/_rels/workbook.xml.rels")) || "";
+  const target = {}; for (const m of rels.matchAll(/<(?:\w+:)?Relationship\b[^>]*>/g)) { const id = (m[0].match(/\bId="([^"]+)"/) || [])[1], t = (m[0].match(/\bTarget="([^"]+)"/) || [])[1]; if (id && t) target[id] = t.startsWith("/") ? t.slice(1) : "xl/" + t.replace(/^\.\//, ""); }
+  const sheets = [...wbx.matchAll(/<(?:\w+:)?sheet\b[^>]*>/g)].map((m) => ({ name: unxml((m[0].match(/\bname="([^"]*)"/) || [])[1] || ""), path: target[(m[0].match(/\s\w+:id="([^"]*)"/) || [])[1]] }));
+  const sstx = await get("xl/sharedStrings.xml");
+  const sst = sstx ? [...sstx.matchAll(/<(?:\w+:)?si>([\s\S]*?)<\/(?:\w+:)?si>/g)].map((m) => [...m[1].replace(/<(?:\w+:)?rPh\b[\s\S]*?<\/(?:\w+:)?rPh>/g, "").matchAll(/<(?:\w+:)?t\b[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/g)].map((x) => unxml(x[1])).join("")) : [];
+  return {
+    name: file.name, sheets,
+    async head(sheet, n = 10) { const x = await get(sheet.path, (s) => (s.match(/<\/(?:\w+:)?row>/g) || []).length >= n || s.includes("</sheetData>")); return x ? parseRows(x, sst, n) : []; },
+    async rows(sheet) { const x = await get(sheet.path); return x ? parseRows(x, sst) : []; },
+  };
+}
+
+// ============================================================ import: detect & extract into the shared raw format
+const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// "ACME MOTORS~ LLC" -> "Acme Motors"; supplier names come from the genforecast file itself
+const prettyName = (s) => s.replace(/~/g, " ").replace(/[,.]?\s+(INC|LLC|L\.L\.C|CORP|CORPORATION|CO|LTD|GMBH|SRL|SPA|SA|AG|UNIPERSONALE|OF NORTH AMERICA)\.?(?=\s|$)/gi, "")
+  .replace(/\s+/g, " ").trim().toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).replace(/\b(Abb)\b/, "ABB");
+const cellTxt = (v, upper = true) => { if (v == null) return ""; let s = String(v).replace(/ /g, " ").trim(); if (/^-?\d+\.0+$/.test(s)) s = s.replace(/\.0+$/, ""); return upper ? s.toUpperCase() : s; };
+const toInt = (v) => { const s = cellTxt(v); if (s === "" || isNaN(+s)) return null; return Math.trunc(+s); };
+function headerMatch(row, spec) {
+  const cols = (row || []).map(norm);
+  if (!spec.required.every((r) => cols.some((c) => c && c.startsWith(r)))) return null;
+  const find = (k) => { let i = cols.indexOf(k); if (i < 0) i = cols.findIndex((c) => c && c.startsWith(k)); return i; };
+  const ix = {}; for (const [key, name] of Object.entries(spec.cols)) ix[key] = find(name);
+  return { ix, width: cols.filter(Boolean).length };
+}
+async function detect(wb) {
+  let best = null;
+  for (const sheet of wb.sheets) {
+    if (!sheet.path) continue;
+    const head = await wb.head(sheet);
+    for (const [kind, spec] of Object.entries(SPECS)) {
+      for (let r = 0; r < head.length; r++) {
+        const hm = headerMatch(head[r], spec);
+        if (hm) { if (!best || (best.kind === kind && hm.width > best.width)) best = { kind, sheet, headerRow: r, ...hm }; break; }
+      }
+    }
+  }
+  return best;
+}
+function extract(kind, rows, d) {
+  const body = rows.slice(d.headerRow + 1); const ix = d.ix;
+  const g = (r, k) => ix[k] >= 0 ? r[ix[k]] : undefined;
+  if (kind === "orders") {
+    const o = { eso: [], sch: [], strt: [], gen: [], eta: [], prod: [], fuel: [], mdl: [], cyl: [], type: [], outplant: [], ac: [] };
+    for (const r of body) { const e = cellTxt(g(r, "eso")); if (!e) continue;
+      o.eso.push(e.slice(0, 5)); o.sch.push(toISO(g(r, "sch"))); o.strt.push(toISO(g(r, "strt"))); o.eta.push(toISO(g(r, "eta")));
+      o.gen.push(toInt(g(r, "gen"))); o.cyl.push(toInt(g(r, "cyl")));
+      for (const k of ["prod", "fuel", "mdl", "type", "outplant", "ac"]) o[k].push(cellTxt(g(r, k), false)); }
+    return o;
+  }
+  if (kind === "genforecast") {
+    const head = new Map(), parts = new Map();
+    for (const r of body) { const e = cellTxt(g(r, "eso")).slice(0, 5); if (!e) continue;
+      if (!head.has(e)) { head.set(e, { grp: toInt(g(r, "grp")), sup: cellTxt(g(r, "sup")), name: cellTxt(g(r, "supname"), false) }); parts.set(e, new Set()); }
+      const p = cellTxt(g(r, "part")); if (p) parts.get(e).add(p); }
+    const sigStr = new Map(); for (const [e, s] of parts) sigStr.set(e, [...s].sort().join("|"));
+    const sigs = [...new Set([...sigStr.values()].filter(Boolean))].sort(); const sx = new Map(sigs.map((s, i) => [s, i]));
+    const out = { eso: [], grp: [], sup: [], sig: [], sigs, supNames: {} };
+    for (const [e, h] of head) { out.eso.push(e); out.grp.push(h.grp); out.sup.push(h.sup); out.sig.push(sx.has(sigStr.get(e)) ? sx.get(sigStr.get(e)) : -1);
+      if (h.sup && h.name && !out.supNames[h.sup]) out.supNames[h.sup] = prettyName(h.name); }
+    return out;
+  }
+  if (kind === "tad") {
+    const t = { eso: [], serial: [], arr: [], receipt: [] };
+    for (const r of body) { const s = cellTxt(g(r, "serial")); if (!s) continue;
+      t.eso.push(cellTxt(g(r, "eso")).slice(0, 5)); t.serial.push(s); t.arr.push(toInt(g(r, "arr"))); t.receipt.push(toISO(g(r, "receipt"))); }
+    return t;
+  }
+  const w = { date: [], eso: [], orig: [], new: [], loop: [] };
+  for (const r of body) { if (!r.some((v) => v != null && String(v).trim() !== "")) continue;
+    w.date.push(toISO(g(r, "date"))); w.eso.push(cellTxt(g(r, "eso")).slice(0, 5)); w.orig.push(cellTxt(g(r, "orig"))); w.new.push(cellTxt(g(r, "new"))); w.loop.push(cellTxt(g(r, "loop"))); }
+  return w;
+}
+const dataRows = (rows, d) => rows.slice(d.headerRow + 1).filter((r) => r.some((v) => v != null && String(v).trim() !== "")).length;
+const asofOf = (raw) => [...raw.orders.strt, ...raw.tad.receipt].filter(Boolean).sort().pop();
+
+// ============================================================ business logic
+function newKind(v) {
+  if (v === "") return "NA"; if (v === "-") return "dash"; if (v.includes("TBD")) return "TBD"; if (v.includes("SURPLUS")) return "SURPLUS"; if (v.includes("CLOSE")) return "CLOSE";
+  if (/^[A-Z0-9]{3}\d{5}$/.test(v)) return "serial"; if (/^[A-Z]{5}$/.test(v)) return "eso"; if (SERIAL_RE.test(v)) return "serial+txt"; return "other";
+}
+const firstSerial = (v) => (v.match(SERIAL_RE) || [""])[0];
+const validEso = (e) => /^[A-Z]{5}$/.test(e) ? e : "";
+
+// ---------------------------------------------------------------- delay-risk model, trained in the browser
+// Same specification as the analyst's Python model: orders planned 58–30 days before the as-of date,
+// label = not started within 30 days of the planned start; one-hot categories (fewer than 10 orders ->
+// "other"), standardised numbers, L2-penalised logistic regression (C = 0.1) solved exactly by Newton's method.
+const RISK_CAT = ["supplier", "Type", "SLS_MDL", "Prod", "FUEL", "OUTPLANT", "AC"];
+const RISK_NUM = ["CYL", "gets_gen"];
+const RISK_SPEC = { C: 0.1, minFreq: 10, windowFrom: 58, windowTo: 30, lateDays: 30, splitDay: 41, bands: { low_below: 0.55, high_from: 0.80 } };
+function riskCohort(raw) {
+  const O = raw.orders, asof = dayNum(raw.asof), sup = new Map();
+  raw.gf.eso.forEach((e, i) => { if (!sup.has(e)) sup.set(e, raw.gf.sup[i]); });
+  const rows = [];
+  for (let i = 0; i < O.eso.length; i++) {
+    if (!O.sch[i]) continue; const sd = dayNum(O.sch[i]);
+    if (sd < asof - RISK_SPEC.windowFrom || sd > asof - RISK_SPEC.windowTo) continue;
+    const y = !O.strt[i] || dayNum(O.strt[i]) - sd > RISK_SPEC.lateDays ? 1 : 0;
+    rows.push({ y, sd, supplier: sup.get(O.eso[i]) || "NA", Type: O.type[i] || "NA", SLS_MDL: O.mdl[i] || "NA", Prod: O.prod[i] || "NA",
+      FUEL: O.fuel[i] || "NA", OUTPLANT: O.outplant[i] || "NA", AC: O.ac[i] || "NA", CYL: O.cyl[i], gets_gen: O.gen[i] != null ? 1 : 0 });
+  }
+  return rows;
+}
+function solve(A, b) {   // Gaussian elimination with partial pivoting
+  const n = b.length, M = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    [M[c], M[p]] = [M[p], M[c]];
+    for (let r = c + 1; r < n; r++) { const f = M[r][c] / M[c][c]; if (f) for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]; }
+  }
+  const x = new Array(n).fill(0);
+  for (let r = n - 1; r >= 0; r--) { let s = M[r][n]; for (let k = r + 1; k < n; k++) s -= M[r][k] * x[k]; x[r] = s / M[r][r]; }
+  return x;
+}
+function fitRisk(rows) {
+  const cats = {}, nums = {};
+  for (const f of RISK_CAT) {
+    const cnt = {}; rows.forEach((r) => (cnt[r[f]] = (cnt[r[f]] || 0) + 1));
+    const freq = Object.keys(cnt).filter((k) => cnt[k] >= RISK_SPEC.minFreq).sort();
+    cats[f] = { freq, hasInfreq: Object.keys(cnt).some((k) => cnt[k] < RISK_SPEC.minFreq) };
+  }
+  for (const f of RISK_NUM) {
+    const known = rows.map((r) => r[f]).filter((v) => v != null);
+    const mean = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 0;
+    const xs = rows.map((r) => r[f] ?? mean);
+    const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length) || 1; nums[f] = { mean, sd };
+  }
+  const cols = []; for (const f of RISK_CAT) { cats[f].freq.forEach((v) => cols.push([f, v])); if (cats[f].hasInfreq) cols.push([f, null]); }
+  for (const f of RISK_NUM) cols.push([f, "num"]);
+  const encode = (r) => cols.map(([f, v]) => v === "num" ? ((r[f] ?? nums[f].mean) - nums[f].mean) / nums[f].sd
+    : v === null ? (cats[f].freq.includes(r[f]) ? 0 : 1) : (r[f] === v ? 1 : 0));
+  const X = rows.map(encode), y = rows.map((r) => r.y), d = cols.length, C = RISK_SPEC.C;
+  let w = new Array(d).fill(0), b = 0;
+  for (let it = 0; it < 60; it++) {
+    const g = new Array(d + 1).fill(0), H = Array.from({ length: d + 1 }, () => new Array(d + 1).fill(0));
+    for (let i = 0; i < X.length; i++) {
+      const xi = X[i]; let z = b; for (let j = 0; j < d; j++) z += w[j] * xi[j];
+      const p = 1 / (1 + Math.exp(-z)), e = p - y[i], s = p * (1 - p);
+      for (let j = 0; j < d; j++) { if (!xi[j]) continue; g[j] += C * e * xi[j]; for (let k = j; k < d; k++) if (xi[k]) H[j][k] += C * s * xi[j] * xi[k]; H[j][d] += C * s * xi[j]; }
+      g[d] += C * e; H[d][d] += C * s;
+    }
+    for (let j = 0; j < d; j++) { g[j] += w[j]; H[j][j] += 1; for (let k = j + 1; k <= d; k++) H[k][j] = H[j][k]; }
+    const step = solve(H, g); let mx = 0;
+    for (let j = 0; j < d; j++) { w[j] -= step[j]; mx = Math.max(mx, Math.abs(step[j])); }
+    b -= step[d]; mx = Math.max(mx, Math.abs(step[d]));
+    if (mx < 1e-10) break;
+  }
+  const coef = new Map(cols.map((c, j) => [c[0] + "\u0001" + c[1], w[j]]));
+  const R = { intercept: b, categorical: {}, numeric: {}, bands: RISK_SPEC.bands };
+  for (const f of RISK_CAT) {
+    const levels = {}; cats[f].freq.forEach((v) => (levels[v] = coef.get(f + "\u0001" + v)));
+    const infrequent = cats[f].hasInfreq ? coef.get(f + "\u0001null") : 0;
+    const base = rows.reduce((a, r) => a + (levels[r[f]] ?? infrequent), 0) / rows.length;
+    R.categorical[f] = { levels, infrequent, baseline: base };
+  }
+  for (const f of RISK_NUM) R.numeric[f] = { coef: coef.get(f + "\u0001num"), ...nums[f] };
+  return R;
+}
+const sigmoidRisk = (R, r) => {
+  let z = R.intercept;
+  for (const [f, s] of Object.entries(R.categorical)) z += s.levels[r[f]] ?? s.infrequent;
+  for (const [f, s] of Object.entries(R.numeric)) z += s.coef * ((r[f] ?? s.mean) - s.mean) / s.sd;
+  return 1 / (1 + Math.exp(-z));
+};
+function auc(y, p) {
+  const idx = p.map((v, i) => i).sort((a, b) => p[a] - p[b]); const rank = new Array(p.length);
+  for (let i = 0; i < idx.length;) { let j = i; while (j + 1 < idx.length && p[idx[j + 1]] === p[idx[i]]) j++; for (let k = i; k <= j; k++) rank[idx[k]] = (i + j) / 2 + 1; i = j + 1; }
+  const n1 = y.filter(Boolean).length, n0 = y.length - n1; if (!n1 || !n0) return null;
+  return (y.reduce((a, v, i) => a + (v ? rank[i] : 0), 0) - n1 * (n1 + 1) / 2) / (n1 * n0);
+}
+function trainRisk(raw) {
+  const rows = riskCohort(raw); const n1 = rows.filter((r) => r.y).length;
+  if (rows.length < 60 || n1 < 10 || rows.length - n1 < 10) return null;
+  const R = fitRisk(rows);
+  // evaluation: stratified 5-fold CV (seeded) and a time split, both re-fitting on the training part only
+  let s = 42; const rnd = () => ((s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296);
+  const fold = new Array(rows.length);
+  for (const cls of [0, 1]) { const ids = rows.map((r, i) => i).filter((i) => rows[i].y === cls); for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } ids.forEach((id, k) => (fold[id] = k % 5)); }
+  const pcv = new Array(rows.length);
+  for (let f = 0; f < 5; f++) { const m = fitRisk(rows.filter((r, i) => fold[i] !== f)); rows.forEach((r, i) => { if (fold[i] === f) pcv[i] = sigmoidRisk(m, r); }); }
+  const asof = dayNum(raw.asof), split = asof - RISK_SPEC.splitDay;
+  const tr = rows.filter((r) => r.sd < split), te = rows.filter((r) => r.sd >= split);
+  let temporal = null;
+  if (tr.length >= 40 && te.length >= 20) { const m = fitRisk(tr); temporal = auc(te.map((r) => r.y), te.map((r) => sigmoidRisk(m, r))); }
+  const band = (p) => p >= RISK_SPEC.bands.high_from ? "High" : p < RISK_SPEC.bands.low_below ? "Low" : "Medium";
+  const bl = {}; for (const b of ["Low", "Medium", "High"]) { const ix = pcv.map((p, i) => i).filter((i) => band(pcv[i]) === b); bl[b] = { n: ix.length, late_rate: ix.length ? ix.filter((i) => rows[i].y).length / ix.length : 0 }; }
+  for (const f of RISK_CAT) { const st = {}; rows.forEach((r) => { const k = r[f]; st[k] = st[k] || { n: 0, late: 0 }; st[k].n++; st[k].late += r.y; });
+    R.categorical[f].stats = Object.fromEntries(Object.entries(st).map(([k, v]) => [k, { n: v.n, late_rate: v.late / v.n }])); }
+  R.evaluation = { n: rows.length, late_rate: n1 / rows.length, cv_auc: auc(rows.map((r) => r.y), pcv), temporal_auc: temporal,
+    window: `${fmtDate(isoOf(asof - RISK_SPEC.windowFrom))} – ${fmtDate(isoOf(asof - RISK_SPEC.windowTo))}`, band_late_rate: bl };
+  return R;
+}
+
+function riskOf(rec, R) {
+  if (!R) return { p: null, level: "n/a", drivers: [] };
+  let z = R.intercept; const drivers = [];
+  for (const [f, spec] of Object.entries(R.categorical)) {
+    let v = rec[RISK_FIELD[f]] || "NA"; if (f === "supplier" && !rec.sup) v = "NA";
+    let c = spec.levels[v];
+    if (c === undefined) { const k = Object.keys(spec.levels).find((x) => x.toUpperCase() === String(v).toUpperCase()); c = k !== undefined ? spec.levels[k] : spec.infrequent; }
+    z += c; drivers.push({ f, v, d: c - spec.baseline });
+  }
+  for (const [f, spec] of Object.entries(R.numeric)) {
+    const x = f === "gets_gen" ? 1 : (rec.cyl ?? spec.mean); const c = spec.coef * (x - spec.mean) / spec.sd; z += c;
+    if (f === "CYL") drivers.push({ f, v: rec.cyl ?? "—", d: c });
+  }
+  const p = 1 / (1 + Math.exp(-z));
+  const level = p >= R.bands.high_from ? "High" : p < R.bands.low_below ? "Low" : "Medium";
+  drivers.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+  return { p, level, drivers };
+}
+
+function compute(raw) {
+  const R = trainRisk(raw);
+  const asof = dayNum(raw.asof);
+  const O = raw.orders, G = raw.gf, T = raw.tad, W = raw.swaps;
+  const oIx = new Map(); O.eso.forEach((e, i) => { if (!oIx.has(e)) oIx.set(e, i); });
+  const gIx = new Map(); G.eso.forEach((e, i) => { if (!gIx.has(e)) gIx.set(e, i); });
+  const gSig = (e) => gIx.has(e) ? G.sig[gIx.get(e)] : -1;
+
+  // swap log: loops and refills
+  const n = W.eso.length; const eso = W.eso.map(validEso);
+  const kNew = W.new.map(newKind), sNew = W.new.map(firstSerial), sOrig = W.orig.map(firstSerial);
+  const hasSer = kNew.map((k) => k === "serial" || k === "serial+txt");
+  const usedSerials = new Set(); for (let i = 0; i < n; i++) if (hasSer[i]) usedSerials.add(sNew[i]);
+  const lastRefill = new Map(); // eso -> list of row indexes receiving a serial
+  for (let i = 0; i < n; i++) if (hasSer[i] && eso[i]) { if (!lastRefill.has(eso[i])) lastRefill.set(eso[i], []); lastRefill.get(eso[i]).push(i); }
+  const loopsAll = [];
+  for (let i = 1; i < n; i++) {
+    if (!(sOrig[i] && sOrig[i] === sNew[i - 1] && kNew[i] === "TBD")) continue;
+    const later = (lastRefill.get(eso[i]) || []).find((j) => j > i);
+    loopsAll.push({ row: i, date: W.date[i], donor: eso[i], recip: eso[i - 1], serial: sOrig[i], fam: sOrig[i].slice(0, 3),
+      flag: W.loop[i].toUpperCase(), refilled: later !== undefined, refillDate: later !== undefined ? W.date[later] : null });
+  }
+  const lentTo = new Map(); for (const l of loopsAll) if (l.flag === "OPEN" && !l.refilled && l.donor && !lentTo.has(l.donor)) lentTo.set(l.donor, l.recip);
+
+  // TAD supply
+  const tadEso = new Set(T.eso);
+  const supply = T.serial.map((s, i) => {
+    const owner = T.eso[i], oi = oIx.get(owner);
+    let kind;
+    if (usedSerials.has(s)) kind = "in_swap_log";
+    else if (oi === undefined) kind = "idle";
+    else if (O.strt[oi]) kind = "owner_started";
+    else if (O.sch[oi] && dayNum(O.sch[oi]) < asof - PARAMS.stuckDays) kind = "owner_stuck";
+    else kind = "owner_open";
+    return { serial: s, owner, ownerOk: !!validEso(owner), arr: T.arr[i], receipt: T.receipt[i], kind, sig: gSig(owner),
+      ownerSch: oi !== undefined ? O.sch[oi] : null };
+  });
+  const byArr = new Map(); for (const t of supply) if (SOURCE[t.kind]) { if (!byArr.has(t.arr)) byArr.set(t.arr, []); byArr.get(t.arr).push(t); }
+
+  // orders that need a GEN and have not started, planned before as-of + horizon
+  const orders = [];
+  for (let i = 0; i < O.eso.length; i++) {
+    if (O.gen[i] == null || O.strt[i] || !O.sch[i]) continue;
+    const sd = dayNum(O.sch[i]); if (sd >= asof + PARAMS.horizonDays) continue;
+    const e = O.eso[i]; if (oIx.get(e) !== i) continue;
+    const gi = gIx.get(e);
+    const rec = { eso: e, sch: O.sch[i], d: sd - asof, gen: O.gen[i], grp: gi !== undefined && G.grp[gi] != null ? G.grp[gi] : O.gen[i],
+      sig: gi !== undefined ? G.sig[gi] : -1, sup: gi !== undefined ? G.sup[gi] : "", eta: O.eta[i],
+      prod: O.prod[i], fuel: O.fuel[i], mdl: O.mdl[i], cyl: O.cyl[i], type: O.type[i], outplant: O.outplant[i], ac: O.ac[i] };
+    rec.supName = rec.sup ? ((raw.gf.supNames || {})[rec.sup] || rec.sup) : "Unknown";
+    if (tadEso.has(e)) { rec.st = "green"; rec.why = "The GEN is in TAD stock." + (rec.d < 0 ? ` The planned start passed ${-rec.d} days ago, so the hold-up is likely something other than the GEN.` : ""); }
+    else if (lentTo.has(e)) { rec.st = "orange"; rec.why = `This order's GEN was lent to ${lentTo.get(e)} in a swap and no replacement has arrived yet.`; }
+    else if (rec.d < 0) { rec.st = "red"; rec.why = `The planned start passed ${-rec.d} days ago and the GEN is not in stock.`; }
+    else if (rec.eta && rec.eta > rec.sch) { rec.st = "red"; rec.why = `The GEN ETA (${fmtDate(rec.eta)}) is after the planned start.`; }
+    else if (rec.d <= PARAMS.nearDays) { rec.st = "red"; rec.why = `Starts in ${rec.d} days and the GEN is not in stock yet.`; }
+    else { rec.st = "yellow"; rec.why = `Starts in ${rec.d} days. The GEN has not been received yet, but there is no known conflict.`; }
+    rec.week = rec.d < 0 ? "Overdue" : "W" + (Math.floor(rec.d / 7) + 1);
+    rec.risk = riskOf(rec, R);
+    rec.needy = rec.st === "red" || rec.st === "orange";
+    orders.push(rec);
+  }
+  const candidatesFor = (o) => {
+    const list = (byArr.get(o.grp) || []).filter((t) => (o.sig < 0 || t.sig < 0 || t.sig === o.sig) &&
+      (t.kind !== "owner_open" || (t.ownerSch && dayNum(t.ownerSch) >= dayNum(o.sch) + PARAMS.slackDays)));
+    return list.map((t) => ({ ...t, exact: t.sig >= 0 && o.sig >= 0 && t.sig === o.sig }))
+      .sort((a, b) => (b.exact - a.exact) || (SOURCE[a.kind].rank - SOURCE[b.kind].rank) || ((b.ownerSch ? dayNum(b.ownerSch) : 1e9) - (a.ownerSch ? dayNum(a.ownerSch) : 1e9)));
+  };
+  for (const o of orders) if (o.needy) o.cands = candidatesFor(o);
+
+  // open loops tracker (SPE flag = Open)
+  const loops = loopsAll.filter((l) => l.flag === "OPEN").map((l) => {
+    const oi = oIx.get(l.donor); const sch = oi !== undefined ? O.sch[oi] : null, strt = oi !== undefined ? O.strt[oi] : null;
+    const dStart = sch ? dayNum(sch) - asof : null; let urg, note;
+    if (l.refilled) { urg = "check"; note = `The log shows a replacement GEN on ${fmtDate(l.refillDate)} – the loop can probably be closed.`; }
+    else if (!sch) { urg = "check"; note = "The waiting order is no longer in All Orders (shipped or cancelled?) – confirm and close."; }
+    else if (strt) { urg = "check"; note = `The waiting order started on ${fmtDate(strt)} – confirm and close.`; }
+    else if (dStart <= PARAMS.nearDays) { urg = "urgent"; note = (dStart < 0 ? `Planned start passed ${-dStart} days ago` : `Starts in ${dStart} days`) + " and still no replacement GEN."; }
+    else if (dStart <= 30) { urg = "watch"; note = `Starts in ${dStart} days.`; }
+    else { urg = "ok"; note = `Starts in ${dStart} days – time to source a replacement.`; }
+    return { ...l, sch, dStart, age: asof - dayNum(l.date), urg, note };
+  });
+  return { asof: raw.asof, orders, loops, supply, risk: R, supNames: raw.gf.supNames || {} };
+}
+
+// recommended plan: most urgent first, user selections are reserved
+function plan(M, actions) {
+  const reserved = new Map();
+  for (const [e, a] of Object.entries(actions)) if (a.gen) reserved.set(a.gen, e);
+  const used = new Set(reserved.keys());
+  const needy = M.orders.filter((o) => o.needy).sort((a, b) => (a.d - b.d) || ((b.risk.p ?? 0) - (a.risk.p ?? 0)));
+  for (const o of needy) {
+    const mine = actions[o.eso] && actions[o.eso].gen;
+    o.chosen = mine || null;
+    o.rec = null;
+    if (!mine) { const c = o.cands.find((t) => !used.has(t.serial)); if (c) { o.rec = c.serial; used.add(c.serial); } }
+    o.nOpts = o.cands.filter((t) => !reserved.has(t.serial) || reserved.get(t.serial) === o.eso).length;
+  }
+  M.reserved = reserved;
+}
+
+// ============================================================ state
+const DATA = JSON.parse($("#data").textContent);
+let RAW = DATA.raw || null, M = null;
+const STORE_KEY = "gct.actions.v1";
+let ACTIONS = {};
+try { ACTIONS = JSON.parse(localStorage.getItem(STORE_KEY) || "{}") || {}; } catch (_) { ACTIONS = {}; }
+const saveActions = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(ACTIONS)); return true; } catch (_) { return false; } };
+const F = { status: new Set(), week: null, risk: null, sup: null, opts: null, tag: null, q: "" };
+let VIEW = "orders", SORT = { key: null, dir: 1 }, PAGE = 0, CURRENT = null;
+const PAGE_SIZE = 50;
+
+const EMPTY = { gf: { eso: [], grp: [], sup: [], sig: [], sigs: [] }, tad: { eso: [], serial: [], arr: [], receipt: [] },
+  swaps: { date: [], eso: [], orig: [], new: [], loop: [] } };
+const MISSING_NOTE = { tad: "TAD Report (no “In stock” status or substitute GENs)", genforecast: "genforecast (no GEN supplier or configuration matching)",
+  swaps: "Gen Swap Summary (no “GEN lent out” status or swap loops)" };
+function rebuild() {
+  const has = !!(RAW && RAW.orders);
+  $("#empty").hidden = has; $("#dash").hidden = !has;
+  if (!has) {
+    M = null; buildGuide(); $("#asof").textContent = "—"; $("#origin").textContent = "no data loaded";
+    $("#foot").textContent = ""; $("#computed").textContent = ""; closeDrawer(); return;
+  }
+  for (const k of Object.keys(EMPTY)) if (!RAW[k]) RAW[k] = EMPTY[k];
+  M = compute(RAW); plan(M, ACTIONS); buildGuide();
+  $("#asof").textContent = fmtDate(M.asof);
+  $("#origin").textContent = `imported ${RAW.loaded}`;
+  $("#foot").textContent = "Sources: " + RAW.sources.map((s) => `${s.file} › ${s.sheet} (${fmt(s.rows)} rows)`).join(" · ");
+  const miss = Object.keys(MISSING_NOTE).filter((k) => !RAW.sources.some((s) => s.kind === k));
+  $("#missing").hidden = !miss.length;
+  $("#missing").innerHTML = miss.length ? `<b>Not loaded:</b> ${miss.map((k) => MISSING_NOTE[k]).join(" · ")}. Use <b>Import data</b> to add them.` : "";
+  writeComputed(); renderAll();
+}
+function writeComputed() {
+  const k = kpiCounts(M.orders);
+  $("#computed").textContent = JSON.stringify({ asof: M.asof, kpi: k,
+    orders: M.orders.map((o) => [o.eso, o.st, o.d, o.risk.p == null ? null : Math.round(o.risk.p * 1e4) / 1e4, o.needy ? o.cands.length : null, o.rec]),
+    loops: M.loops.map((l) => [l.donor, l.urg]) });
+}
+
+// ============================================================ filtering
+const tagsOf = (e) => (ACTIONS[e] && ACTIONS[e].tags) || [];
+function pass(o, skip) {
+  if (skip !== "status" && F.status.size && !F.status.has(o.st)) return false;
+  if (skip !== "week" && F.week && o.week !== F.week) return false;
+  if (skip !== "risk" && F.risk && o.risk.level !== F.risk) return false;
+  if (skip !== "sup" && F.sup && o.supName !== F.sup) return false;
+  if (skip !== "opts" && F.opts === "has" && !(o.needy && (o.rec || o.chosen))) return false;
+  if (skip !== "opts" && F.opts === "none" && !(o.needy && !o.rec && !o.chosen)) return false;
+  if (skip !== "tag" && F.tag && !tagsOf(o.eso).includes(F.tag)) return false;
+  if (F.q) { const hay = `${o.eso} ${o.mdl} ${o.type} ${o.supName} ${o.grp} ${o.chosen || ""} ${o.rec || ""} ${tagsOf(o.eso).join(" ")} ${(ACTIONS[o.eso] && ACTIONS[o.eso].note) || ""}`.toUpperCase();
+    if (!hay.includes(F.q.toUpperCase())) return false; }
+  return true;
+}
+function kpiCounts(list) {
+  const k = { red: 0, orange: 0, yellow: 0, green: 0, overdue: 0, needy: 0, covered: 0, total: list.length };
+  for (const o of list) { k[o.st]++; if (o.d < 0) k.overdue++; if (o.needy) { k.needy++; if (o.rec || o.chosen) k.covered++; } }
+  return k;
+}
+
+// ============================================================ rendering
+function renderAll() { renderKpis(); renderChart(); renderBars(); renderChips(); renderTable(); }
+
+function renderKpis() {
+  const k = kpiCounts(M.orders.filter((o) => pass(o, "status")));
+  const kw = kpiCounts(M.orders.filter((o) => pass(o, "week")));
+  const cards = [
+    { st: "red", val: k.red, sub: `${fmt(M.orders.filter((o) => o.st === "red" && pass(o, "status") && (o.rec || o.chosen)).length)} have a GEN option` },
+    { st: "orange", val: k.orange, sub: "Lent in a swap, no replacement yet" },
+    { st: "yellow", val: k.yellow, sub: "Not received, no conflict yet" },
+    { st: "green", val: k.green, sub: "GEN already in TAD" },
+    { st: "overdue", val: kw.overdue, sub: "Past planned start, not started" },
+  ];
+  $("#kpis").innerHTML = cards.map((c) => {
+    const isOver = c.st === "overdue"; const on = isOver ? F.week === "Overdue" : F.status.has(c.st);
+    const dim = !isOver && F.status.size && !F.status.has(c.st);
+    const lab = isOver ? `<span class="ico gray" aria-hidden="true">⏱</span>Overdue starts` : `<span class="ico ${c.st}" aria-hidden="true">${ST[c.st].icon}</span>${ST[c.st].label}`;
+    return `<button type="button" class="kpi${dim ? " dim" : ""}" data-k="${c.st}" aria-pressed="${on}"><div class="lab">${lab}</div><div class="val">${fmt(c.val)}</div><div class="sub">${esc(c.sub)}</div></button>`;
+  }).join("");
+  $$("#kpis .kpi").forEach((b) => b.addEventListener("click", () => {
+    const k2 = b.dataset.k;
+    if (k2 === "overdue") F.week = F.week === "Overdue" ? null : "Overdue";
+    else { F.status.has(k2) ? F.status.delete(k2) : F.status.add(k2); }
+    setView("orders"); PAGE = 0; renderAll();
+  }));
+}
+
+const tip = $("#tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block"; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8); tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+function renderChart() {
+  $("#legend").innerHTML = ST_ORDER.map((s) => `<span><span class="sw" style="background:${ST[s].color}"></span>${ST[s].label}</span>`).join("");
+  const list = M.orders.filter((o) => pass(o, "week"));
+  const weeks = []; const a = dayNum(M.asof);
+  for (let w = 1; w <= 8; w++) { const c = { key: "W" + w, label: `W${w}`, range: `${fmtDate(isoOf(a + 7 * (w - 1)), false)}–${fmtDate(isoOf(a + 7 * w - 1), false)}`, red: 0, orange: 0, yellow: 0, green: 0 }; weeks.push(c); }
+  for (const o of list) { const w = weeks.find((x) => x.key === o.week); if (w) w[o.st]++; }
+  const svg = $("#chart"); const Wd = svg.clientWidth || 640, H = 230, m = { t: 8, r: 6, b: 36, l: 36 };
+  const iw = Wd - m.l - m.r, ih = H - m.t - m.b;
+  const tot = weeks.map((w) => ST_ORDER.reduce((s, k) => s + w[k], 0));
+  const max = Math.max(1, ...tot); const step = Math.pow(10, Math.floor(Math.log10(max))); const nice = Math.ceil(max / step) * step;
+  const y = (v) => ih - v / nice * ih; const bw = iw / weeks.length;
+  let g = `<g transform="translate(${m.l},${m.t})">`;
+  for (let i = 0; i <= 4; i++) { const v = nice / 4 * i; g += `<g class="axis"><line x1="0" x2="${iw}" y1="${y(v)}" y2="${y(v)}"/><text x="-6" y="${y(v) + 4}" text-anchor="end">${fmt(Math.round(v))}</text></g>`; }
+  weeks.forEach((w, i) => {
+    const x = i * bw + bw * .17, wd = bw * .66; let acc = 0, segs = "";
+    for (const s of ST_ORDER) { if (!w[s]) continue; const y0 = y(acc), y1 = y(acc + w[s]); segs += `<rect class="seg" x="${x}" y="${y1}" width="${wd}" height="${Math.max(0, y0 - y1 - 2)}" rx="2" fill="${ST[s].color}"/>`; acc += w[s]; }
+    const dim = F.week && F.week !== w.key ? " dim" : "";
+    g += `<g class="bar${dim}" data-i="${i}" tabindex="0" role="button" aria-label="${w.label} ${w.range}: ${tot[i]} orders"><rect x="${i * bw}" y="0" width="${bw}" height="${ih}" fill="transparent"/>${segs}</g>
+      <g class="axis"><text x="${i * bw + bw / 2}" y="${ih + 14}" text-anchor="middle">${w.label}</text>${bw >= 70 ? `<text x="${i * bw + bw / 2}" y="${ih + 28}" text-anchor="middle">${w.range}</text>` : ""}</g>`;
+  });
+  svg.setAttribute("viewBox", `0 0 ${Wd} ${H}`); svg.innerHTML = g + "</g>";
+  $$("#chart .bar").forEach((el) => { const i = +el.dataset.i, w = weeks[i];
+    el.addEventListener("mousemove", (e) => showTip(e, `<b>${w.label} · ${w.range} · ${fmt(tot[i])} orders</b>` + ST_ORDER.map((s) => `<div class="row"><span><span class="sw" style="background:${ST[s].color}"></span> ${ST[s].label}</span><span>${fmt(w[s])}</span></div>`).join("")));
+    el.addEventListener("mouseleave", () => (tip.style.display = "none"));
+    const pick = () => { F.week = F.week === w.key ? null : w.key; setView("orders"); PAGE = 0; renderAll(); };
+    el.addEventListener("click", pick); el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
+}
+function hbars(el, items, cur, onPick, color) {
+  const max = Math.max(1, ...items.map((i) => i.n));
+  el.innerHTML = items.map((i) => `<button type="button" class="hbar${cur && cur !== i.key ? " dim" : ""}" data-k="${esc(i.key)}" aria-pressed="${cur === i.key}">
+    <span>${i.label}</span><span class="track"><span class="fill" style="width:${i.n / max * 100}%;background:${color(i.key)}"></span></span><span class="n">${fmt(i.n)}</span></button>`).join("");
+  $$(".hbar", el).forEach((b) => b.addEventListener("click", () => onPick(b.dataset.k)));
+}
+function renderBars() {
+  if (!M.risk) { $("#riskbars").innerHTML = '<span class="muted">Not enough history in the loaded All Orders file to estimate delay risk.</span>'; }
+  const rl = M.orders.filter((o) => pass(o, "risk"));
+  const rc = { High: 0, Medium: 0, Low: 0 }; rl.forEach((o) => { if (o.risk.level in rc) rc[o.risk.level]++; });
+  if (M.risk)
+  hbars($("#riskbars"), ["High", "Medium", "Low"].map((k) => ({ key: k, label: `<span class="pill ${k}">${k}</span>`, n: rc[k] })), F.risk,
+    (k) => { F.risk = F.risk === k ? null : k; setView("orders"); PAGE = 0; renderAll(); },
+    (k) => ({ High: "var(--critical)", Medium: "var(--warning)", Low: "var(--good)" }[k]));
+  const sl = M.orders.filter((o) => pass(o, "sup")); const sc = {};
+  sl.forEach((o) => (sc[o.supName] = (sc[o.supName] || 0) + 1));
+  const items = Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, n]) => ({ key: k, label: esc(k), n }));
+  if (F.sup && !items.some((i) => i.key === F.sup)) items.push({ key: F.sup, label: esc(F.sup), n: 0 });
+  hbars($("#supbars"), items, F.sup, (k) => { F.sup = F.sup === k ? null : k; setView("orders"); PAGE = 0; renderAll(); }, () => "var(--accent)");
+}
+function renderChips() {
+  const chips = [];
+  for (const s of F.status) chips.push({ label: `Status: <b>${ST[s].label}</b>`, clear: () => F.status.delete(s) });
+  if (F.week) chips.push({ label: `Week: <b>${F.week === "Overdue" ? "Overdue" : F.week}</b>`, clear: () => (F.week = null) });
+  if (F.risk) chips.push({ label: `Risk: <b>${F.risk}</b>`, clear: () => (F.risk = null) });
+  if (F.sup) chips.push({ label: `Supplier: <b>${esc(F.sup)}</b>`, clear: () => (F.sup = null) });
+  if (F.opts) chips.push({ label: `GEN option: <b>${F.opts === "has" ? "available" : "none found"}</b>`, clear: () => (F.opts = null) });
+  if (F.tag) chips.push({ label: `Tag: <b>${esc(F.tag)}</b>`, clear: () => (F.tag = null) });
+  if (F.q) chips.push({ label: `Search: <b>${esc(F.q)}</b>`, clear: () => { F.q = ""; $("#q").value = ""; } });
+  const el = $("#chips");
+  el.innerHTML = chips.length ? `<span class="muted">Filters:</span>` + chips.map((c, i) => `<button type="button" class="chip" data-i="${i}">${c.label}<span class="x" aria-label="Remove filter">✕</span></button>`).join("") +
+    `<button type="button" class="link" id="clear-all">Clear all</button>` : `<span class="muted">Tip: click any card, bar or row to drill down. Click an order to see GEN options and add tags.</span>`;
+  $$(".chip", el).forEach((b) => b.addEventListener("click", () => { chips[+b.dataset.i].clear(); PAGE = 0; renderAll(); }));
+  const ca = $("#clear-all", el); if (ca) ca.addEventListener("click", () => { F.status.clear(); F.week = F.risk = F.sup = F.opts = F.tag = null; F.q = ""; $("#q").value = ""; PAGE = 0; renderAll(); });
+}
+
+const stRank = { red: 0, orange: 1, yellow: 2, green: 3 };
+const ORDER_COLS = [
+  { key: "st", label: "Status", html: (o) => `<span class="badge"><span class="ico ${o.st}" aria-hidden="true">${ST[o.st].icon}</span>${ST[o.st].label}</span>`, sort: (o) => stRank[o.st] * 1e4 + o.d, csv: (o) => ST[o.st].label },
+  { key: "eso", label: "ESO", html: (o) => `<b class="mono">${esc(o.eso)}</b>` },
+  { key: "sch", label: "Planned start", html: (o) => fmtDate(o.sch), sort: (o) => o.d },
+  { key: "d", label: "Start", cls: (o) => "num" + (o.d < 0 ? " late" : ""), html: (o) => daysText(o.d), csv: (o) => o.d },
+  { key: "mdl", label: "Engine", html: (o) => esc(o.mdl) },
+  { key: "supName", label: "GEN supplier", html: (o) => esc(o.supName) },
+  { key: "risk", label: "Delay risk", html: (o) => o.risk.p == null ? '<span class="muted">n/a</span>' : `<span class="pill ${o.risk.level}">${o.risk.level}</span> <span class="muted">${Math.round(o.risk.p * 100)}%</span>`, sort: (o) => o.risk.p ?? -1, csv: (o) => o.risk.p == null ? "n/a" : `${o.risk.level} (${Math.round(o.risk.p * 100)}%)` },
+  { key: "opts", label: "GEN options", cls: () => "num", html: (o) => o.needy ? (o.nOpts ? fmt(o.nOpts) : '<span class="muted">none</span>') : '<span class="muted">—</span>', sort: (o) => o.needy ? o.nOpts : -1, csv: (o) => o.needy ? o.nOpts : "" },
+  { key: "gen", label: "Selected GEN", html: (o) => o.chosen ? `<b class="mono">${esc(o.chosen)}</b> ✓` : o.rec ? `<span class="mono muted">${esc(o.rec)}</span> <span class="muted">(suggested)</span>` : "", sort: (o) => o.chosen ? 2 : o.rec ? 1 : 0, csv: (o) => o.chosen ? `${o.chosen} (selected)` : o.rec ? `${o.rec} (suggested)` : "" },
+  { key: "tags", label: "Tags", html: (o) => tagsOf(o.eso).map((t) => `<span class="tag">${esc(t)}</span>`).join("") + ((ACTIONS[o.eso] && ACTIONS[o.eso].note) ? '<span class="muted" title="Has a note">✎</span>' : ""), sort: (o) => tagsOf(o.eso).join(","), csv: (o) => tagsOf(o.eso).join("; ") },
+];
+const LOOP_COLS = [
+  { key: "urg", label: "Urgency", html: (l) => `<span class="badge"><span class="ico ${URG[l.urg].cls}" aria-hidden="true">${URG[l.urg].icon}</span>${URG[l.urg].label}</span>`, sort: (l) => ({ urgent: 0, watch: 1, check: 2, ok: 3 }[l.urg]), csv: (l) => URG[l.urg].label },
+  { key: "donor", label: "Waiting order", html: (l) => `<b class="mono">${esc(l.donor)}</b>` },
+  { key: "fam", label: "GEN family", html: (l) => `<span class="mono">${esc(l.fam)}</span>` },
+  { key: "recip", label: "GEN lent to", html: (l) => `<span class="mono">${esc(l.recip)}</span>` },
+  { key: "date", label: "Loop opened", html: (l) => fmtDate(l.date) },
+  { key: "age", label: "Days open", cls: () => "num", html: (l) => fmt(l.age) },
+  { key: "sch", label: "Planned start", html: (l) => fmtDate(l.sch), sort: (l) => l.dStart ?? 1e9 },
+  { key: "note", label: "What to do", html: (l) => esc(l.note) },
+];
+function currentRows() {
+  if (VIEW === "loops") {
+    const q = F.q.toUpperCase();
+    return M.loops.filter((l) => !q || `${l.donor} ${l.recip} ${l.fam} ${l.serial}`.includes(q));
+  }
+  return M.orders.filter((o) => pass(o));
+}
+function renderTable() {
+  if (!M) return;
+  const cols = VIEW === "loops" ? LOOP_COLS : ORDER_COLS;
+  let rows = currentRows();
+  const key = SORT.key || cols[0].key; const c = cols.find((x) => x.key === key) || cols[0];
+  const v = c.sort || ((r) => r[c.key]);
+  rows = rows.slice().sort((a, b) => { const A = v(a), B = v(b); if (A == null && B == null) return 0; if (A == null) return 1; if (B == null) return -1; return (A > B ? 1 : A < B ? -1 : 0) * SORT.dir; });
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)); PAGE = Math.min(PAGE, pages - 1);
+  const slice = rows.slice(PAGE * PAGE_SIZE, (PAGE + 1) * PAGE_SIZE);
+  $("#tbl").innerHTML = `<thead><tr>${cols.map((x) => `<th data-k="${x.key}"${(SORT.key || cols[0].key) === x.key ? ` aria-sort="${SORT.dir > 0 ? "ascending" : "descending"}"` : ""}>${x.label}</th>`).join("")}</tr></thead>
+    <tbody>${slice.map((r) => `<tr data-e="${esc(r.eso || r.donor)}" tabindex="0" class="${CURRENT && CURRENT === (r.eso || r.donor) ? "sel" : ""}">${cols.map((x) => `<td class="${x.cls ? x.cls(r) : ""}">${x.html(r)}</td>`).join("")}</tr>`).join("") ||
+      `<tr><td colspan="${cols.length}" class="muted" style="cursor:default">No orders match these filters.</td></tr>`}</tbody>`;
+  $$("#tbl th").forEach((th) => th.addEventListener("click", () => { const k = th.dataset.k; if ((SORT.key || cols[0].key) === k) SORT.dir = -SORT.dir; else { SORT.key = k; SORT.dir = 1; } renderTable(); }));
+  $$("#tbl tbody tr[data-e]").forEach((tr) => { const open = () => openDrawer(tr.dataset.e); tr.addEventListener("click", open); tr.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); }); });
+  const total = VIEW === "loops" ? M.loops.length : M.orders.length;
+  $("#pager").innerHTML = `<span>${fmt(rows.length)} of ${fmt(total)} ${VIEW === "loops" ? "open loops" : "orders"}</span>` + (pages > 1 ? `<span><button type="button" data-p="-1" ${PAGE === 0 ? "disabled" : ""}>‹ Prev</button> Page ${PAGE + 1} of ${pages} <button type="button" data-p="1" ${PAGE >= pages - 1 ? "disabled" : ""}>Next ›</button></span>` : "");
+  $$("#pager button").forEach((b) => b.addEventListener("click", () => { PAGE += +b.dataset.p; renderTable(); }));
+  $("#tab-loops").textContent = `Open swap loops (${M.loops.length})`;
+}
+function setView(v) { VIEW = v; SORT = { key: null, dir: 1 }; $$(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.view === v)); }
+$$(".tab").forEach((t) => t.addEventListener("click", () => { setView(t.dataset.view); PAGE = 0; renderTable(); }));
+$("#q").addEventListener("input", (e) => { if (!M) return; F.q = e.target.value.trim(); PAGE = 0; renderChips(); renderTable(); if (VIEW === "orders") { renderKpis(); renderChart(); renderBars(); } });
+
+// ============================================================ drawer
+function openDrawer(eso) {
+  const o = M.orders.find((x) => x.eso === eso);
+  const loop = M.loops.find((l) => l.donor === eso);
+  CURRENT = eso;
+  if (!o) {
+    $("#dr-title").innerHTML = `<h3 class="mono">${esc(eso)}</h3><div class="muted">Waiting order in a swap loop</div>`;
+    $("#dr-body").innerHTML = `<section><div class="why">${loop ? esc(loop.note) : ""}</div></section><section class="muted">This order is not in the current order list (not started orders needing a GEN in the next 8 weeks).</section>`;
+  } else {
+    $("#dr-title").innerHTML = `<h3 class="mono">${esc(o.eso)}</h3><div class="badge" style="margin-top:4px"><span class="ico ${o.st}" aria-hidden="true">${ST[o.st].icon}</span><b>${ST[o.st].label}</b><span class="muted">· planned ${fmtDate(o.sch)} (${daysText(o.d)})</span></div>`;
+    renderDrawerBody(o);
+  }
+  $("#drawer").classList.add("on"); $("#scrim").classList.add("on"); $("#drawer").setAttribute("aria-hidden", "false");
+  $("#dr-close").focus(); renderTable();
+}
+function closeDrawer() { if (!$("#drawer").classList.contains("on")) return; $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); $("#drawer").setAttribute("aria-hidden", "true"); CURRENT = null; renderTable(); }
+$("#dr-close").addEventListener("click", closeDrawer); $("#scrim").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { if ($(".modal.on")) $$(".modal").forEach((m) => m.classList.remove("on")); else if ($("#drawer").classList.contains("on")) closeDrawer(); } });
+
+function renderDrawerBody(o) {
+  const a = ACTIONS[o.eso] || {};
+  const drv = o.risk.drivers.filter((d) => Math.abs(d.d) >= 0.05).slice(0, 4);
+  const valLabel = (d) => d.f === "supplier" ? (M.supNames[d.v] || (d.v === "NA" ? "Unknown" : d.v)) : d.v;
+  let opts = "";
+  if (o.needy) {
+    const list = o.cands;
+    opts = list.length ? list.slice(0, 25).map((t) => {
+      const takenBy = M.reserved.get(t.serial); const mine = o.chosen === t.serial; const taken = takenBy && takenBy !== o.eso;
+      const recd = o.rec === t.serial;
+      return `<div class="opt${recd ? " rec" : ""}${mine ? " chosen" : ""}">
+        <div><b class="mono">${esc(t.serial)}</b> ${recd ? '<span class="flag">★ Suggested</span>' : ""}${mine ? '<span class="flag" style="color:var(--good)">✓ Selected</span>' : ""}</div>
+        <div>${mine ? `<button type="button" data-unsel="${esc(t.serial)}">Undo</button>` : taken ? `<button type="button" disabled title="Selected for ${esc(takenBy)}">Taken by ${esc(takenBy)}</button>` : `<button type="button" class="primary" data-sel="${esc(t.serial)}">Select</button>`}</div>
+        <div class="meta"><b>${SOURCE[t.kind].label}</b> · ${t.exact ? "Exact configuration match" : "Same GEN group – verify configuration before swapping"}<br>
+        ${t.kind !== "idle" ? `Currently assigned to <span class="mono">${esc(t.owner)}</span>${t.ownerSch ? ` (planned ${fmtDate(t.ownerSch)})` : ""}` : "Not tied to any open order"} · In TAD since ${fmtDate(t.receipt)}<br><span class="muted">${SOURCE[t.kind].note}</span></div></div>`;
+    }).join("") + (list.length > 25 ? `<div class="muted">+ ${list.length - 25} more compatible GENs</div>` : "")
+      : `<div class="why">No compatible generator was found in TAD stock for GEN group <span class="mono">${esc(o.grp)}</span>. Consider expediting the supplier.</div>`;
+  } else {
+    opts = `<div class="why">${o.st === "green" ? "The GEN is already in TAD stock – no substitute needed." : "The GEN has not arrived yet, but there is no conflict with the planned start. Options will appear here if it becomes short."}</div>`;
+  }
+  const allTags = [...new Set([...PRESET_TAGS, ...Object.values(ACTIONS).flatMap((x) => x.tags || [])])];
+  $("#dr-body").innerHTML = `
+    <section><div class="why">${esc(o.why)}</div></section>
+    <section><h4>Generator options ${o.needy ? `<span class="muted" style="text-transform:none;letter-spacing:0">· ${fmt(o.cands.length)} compatible in TAD</span>` : ""}</h4>${opts}</section>
+    <section><h4>Tags &amp; notes</h4>
+      <div class="taglist">${allTags.map((t) => `<button type="button" class="tagbtn" aria-pressed="${(a.tags || []).includes(t)}" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+      <div class="addtag"><input type="text" id="new-tag" placeholder="Add your own tag" maxlength="40"><button type="button" id="add-tag">Add</button></div>
+      <textarea id="note" placeholder="Note for the team (e.g. who is following up)">${esc(a.note || "")}</textarea>
+      <div class="saved" id="saved">${a.ts ? "Last saved " + esc(a.ts) : "Saved automatically in this browser."}</div></section>
+    <section><h4>Delay risk</h4>${o.risk.p == null ? '<div class="muted">Not enough history in the loaded data to estimate delay risk.</div>' : `
+      <div><span class="pill ${o.risk.level}">${o.risk.level}</span> <b>${Math.round(o.risk.p * 100)}%</b> <span class="muted">estimated chance the start slips 30+ days</span></div>
+      <ul class="drivers">${drv.map((d) => `<li><span class="arrow ${d.d > 0 ? "up" : "down"}">${d.d > 0 ? "↑" : "↓"}</span>${FEATURE_LABEL[d.f]}: <b>${esc(valLabel(d))}</b><span class="muted">${d.d > 0 ? "raises" : "lowers"} risk</span></li>`).join("") || "<li class='muted'>Close to a typical order.</li>"}</ul>`}</section>
+    <section><h4>Order details</h4><div class="facts">
+      <div><span>Planned start</span>${fmtDate(o.sch)}</div><div><span>Engine model</span>${esc(o.mdl || "—")}</div>
+      <div><span>Package type</span>${esc(o.type || "—")}</div><div><span>Product line</span>${esc(o.prod || "—")}</div>
+      <div><span>GEN supplier</span>${esc(o.supName)}</div><div><span>GEN group</span><span class="mono" style="display:inline">${esc(o.grp)}</span></div>
+      <div><span>GEN ETA</span>${fmtDate(o.eta)}</div><div><span>Configuration on file</span>${o.sig >= 0 ? "Yes (genforecast)" : "No"}</div></div></section>`;
+  const body = $("#dr-body");
+  $$("[data-sel]", body).forEach((b) => b.addEventListener("click", () => setAction(o.eso, { gen: b.dataset.sel }, `Selected ${b.dataset.sel} for ${o.eso}`)));
+  $$("[data-unsel]", body).forEach((b) => b.addEventListener("click", () => setAction(o.eso, { gen: null }, "Selection removed")));
+  $$(".tagbtn", body).forEach((b) => b.addEventListener("click", () => { const t = b.dataset.tag; const cur = new Set(tagsOf(o.eso)); cur.has(t) ? cur.delete(t) : cur.add(t); setAction(o.eso, { tags: [...cur] }); }));
+  const addTag = () => { const t = $("#new-tag").value.trim(); if (!t) return; setAction(o.eso, { tags: [...new Set([...tagsOf(o.eso), t])] }); };
+  $("#add-tag").addEventListener("click", addTag); $("#new-tag").addEventListener("keydown", (e) => { if (e.key === "Enter") addTag(); });
+  let timer; $("#note").addEventListener("input", (e) => { clearTimeout(timer); timer = setTimeout(() => setAction(o.eso, { note: e.target.value }, null, false), 400); });
+}
+function setAction(eso, patch, toastMsg, rerenderDrawer = true) {
+  const a = { ...(ACTIONS[eso] || {}), ...patch };
+  a.ts = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  if (!a.gen) delete a.gen; if (a.tags && !a.tags.length) delete a.tags; if (!a.note) delete a.note;
+  if (Object.keys(a).filter((k) => k !== "ts").length) ACTIONS[eso] = a; else delete ACTIONS[eso];
+  const ok = saveActions();
+  if ("gen" in patch) plan(M, ACTIONS);
+  const o = M.orders.find((x) => x.eso === eso);
+  if (rerenderDrawer && o) renderDrawerBody(o); else { const s = $("#saved"); if (s) s.textContent = ok ? "Saved " + a.ts : "Could not save (browser storage blocked) – use Export › My tags."; }
+  renderKpis(); renderBars(); renderChips(); renderTable();
+  if (toastMsg) toast(toastMsg);
+  if (!ok) toast("Browser storage is blocked – export your tags to keep them.");
+}
+let toastT; function toast(m) { const t = $("#toast"); t.textContent = m; t.style.display = "block"; clearTimeout(toastT); toastT = setTimeout(() => (t.style.display = "none"), 2200); }
+
+// ============================================================ export / actions files
+function download(name, text, type) { const blob = new Blob([text], { type }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+$("#x-csv").addEventListener("click", () => {
+  if (!M) { toast("Import data first."); $("#menu-export").open = false; return; }
+  const cols = VIEW === "loops" ? LOOP_COLS : ORDER_COLS; const rows = currentRows();
+  const cell = (c, r) => { const v = c.csv ? c.csv(r) : (r[c.key] ?? ""); return `"${String(v).replace(/"/g, '""')}"`; };
+  const extra = VIEW === "orders" ? [{ label: "Note", csv: (o) => (ACTIONS[o.eso] && ACTIONS[o.eso].note) || "" }, { label: "Why", csv: (o) => o.why }] : [];
+  const all = [...cols, ...extra];
+  download(`gen_${VIEW}_${M.asof}.csv`, "﻿" + [all.map((c) => `"${c.label}"`).join(",")].concat(rows.map((r) => all.map((c) => cell(c, r)).join(","))).join("\n"), "text/csv;charset=utf-8");
+  $("#menu-export").open = false;
+});
+$("#x-actions").addEventListener("click", () => { download(`gen_tags_selections_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ app: "GEN Shortage Control Panel", version: 1, actions: ACTIONS }, null, 2), "application/json"); $("#menu-export").open = false; });
+$("#i-actions").addEventListener("click", () => { $("#f-actions").click(); $("#menu-export").open = false; });
+$("#f-actions").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const j = JSON.parse(await f.text()); const inc = j.actions || j; let n = 0;
+    for (const [k, v] of Object.entries(inc)) { if (!/^[A-Z]{5}$/.test(k) || typeof v !== "object") continue; const cur = ACTIONS[k] || {};
+      ACTIONS[k] = { ...cur, ...v, tags: [...new Set([...(cur.tags || []), ...(v.tags || [])])] }; n++; }
+    saveActions(); if (M) { plan(M, ACTIONS); renderAll(); } toast(`Loaded tags & selections for ${n} orders`);
+  } catch (err) { toast("That file could not be read: " + err.message); }
+  e.target.value = "";
+});
+$("#btn-theme").addEventListener("click", () => {
+  const r = document.documentElement; const dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark"; try { localStorage.setItem("gct.theme", r.dataset.theme); } catch (_) {} if (M) renderChart();
+});
+try { const t = localStorage.getItem("gct.theme"); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+
+// ============================================================ import modal
+// PENDING[kind] = { file, sheet, rows, data } to load, or { remove: true } to unload a loaded file
+let PENDING = {};
+const rawKey = (k) => k === "genforecast" ? "gf" : k;
+function openModal(id) { $(id).classList.add("on"); const c = $(id + " .m-close"); if (c) c.focus(); }
+$$(".modal").forEach((m) => { m.addEventListener("click", (e) => { if (e.target === m) m.classList.remove("on"); }); $$(".m-close", m).forEach((b) => b.addEventListener("click", () => m.classList.remove("on"))); });
+function stagedRaw() {
+  const next = RAW ? { ...RAW, sources: RAW.sources.map((s) => ({ ...s })) } : { sources: [] };
+  for (const [k, p] of Object.entries(PENDING)) {
+    next.sources = next.sources.filter((x) => x.kind !== k);
+    if (p.remove) delete next[rawKey(k)];
+    else { next[rawKey(k)] = p.data; next.sources.push({ kind: k, file: p.file, sheet: p.sheet, rows: p.rows }); }
+  }
+  for (const k of Object.keys(EMPTY)) if (!next.sources.some((s) => rawKey(s.kind) === k)) next[k] = EMPTY[k];
+  return next;
+}
+function refreshAsof() { const st = stagedRaw(); $("#imp-asof").value = st.orders ? (asofOf(st) || "") : ""; }
+function renderImportSources() {
+  $("#imp-srcs").innerHTML = Object.entries(SPECS).map(([k, s]) => {
+    const p = PENDING[k]; const cur = RAW && RAW.sources.find((x) => x.kind === k);
+    let status, detected;
+    if (p && p.remove) {
+      status = `<span class="badge"><span class="ico gray">🗑</span>Will be removed</span><br><button type="button" class="link" data-undo="${k}">Undo</button>`;
+      detected = `<span class="muted"><s>${esc(cur.file)}</s></span>`;
+    } else if (p) {
+      status = `<span class="badge"><span class="ico green">✓</span>Ready to load</span><br><button type="button" class="link" data-undo="${k}">Remove</button>`;
+      detected = `${esc(p.file)} › ${esc(p.sheet)}<br><span class="muted">${fmt(p.rows)} rows</span>`;
+    } else if (cur) {
+      status = `<span class="badge"><span class="ico green">✓</span>Loaded</span><br><button type="button" class="link" data-remove="${k}">Remove</button>`;
+      detected = `${esc(cur.file)} › ${esc(cur.sheet)}<br><span class="muted">${fmt(cur.rows)} rows</span>`;
+    } else {
+      status = `<span class="muted">Not loaded</span>${k === "orders" ? '<br><b style="color:var(--critical)">Required</b>' : '<br><span class="muted">Optional</span>'}`;
+      detected = "";
+    }
+    return `<tr><td><b>${s.label}</b><br><span class="muted">${s.hint}</span></td><td>${status}</td><td>${detected}</td></tr>`;
+  }).join("");
+  $$("#imp-srcs [data-undo]").forEach((b) => b.addEventListener("click", () => { delete PENDING[b.dataset.undo]; refreshAsof(); renderImportSources(); }));
+  $$("#imp-srcs [data-remove]").forEach((b) => b.addEventListener("click", () => { PENDING[b.dataset.remove] = { remove: true }; refreshAsof(); renderImportSources(); }));
+  $("#imp-apply").disabled = !Object.keys(PENDING).length;
+  $("#imp-reset").disabled = !RAW;
+}
+$("#btn-import").addEventListener("click", () => { PENDING = {}; $("#imp-msg").textContent = ""; $("#imp-msg").className = "msg"; $("#imp-asof").value = RAW ? RAW.asof : ""; renderImportSources(); openModal("#m-import"); });
+$("#empty-import").addEventListener("click", () => $("#btn-import").click());
+$("#empty-guide").addEventListener("click", () => openModal("#m-guide"));
+const resetFilters = () => { F.status.clear(); F.week = F.risk = F.sup = F.opts = F.tag = null; F.q = ""; $("#q").value = ""; PAGE = 0; };
+$("#imp-reset").addEventListener("click", () => {
+  RAW = null; PENDING = {}; resetFilters(); rebuild();
+  $("#m-import").classList.remove("on"); toast("All data cleared. Import files to start again.");
+});
+async function readFiles(files) {
+  const msg = $("#imp-msg"); msg.className = "msg";
+  if (!("DecompressionStream" in window)) { msg.className = "msg err"; msg.textContent = "This browser is too old to read Excel files. Please use a current Microsoft Edge or Google Chrome."; return; }
+  const problems = [];
+  for (const f of files) {
+    msg.textContent = `Reading ${f.name}…`;
+    try {
+      const wb = await openWorkbook(f); const d = await detect(wb);
+      if (!d) { problems.push(`${f.name}: no sheet with the expected columns was found.`); continue; }
+      msg.textContent = `Extracting ${f.name} › ${d.sheet.name}…`;
+      const rows = await wb.rows(d.sheet); const data = extract(d.kind, rows, d);
+      const count = (data.eso || data.serial || data.date).length;
+      PENDING[d.kind] = { file: f.name, sheet: d.sheet.name, rows: d.kind === "genforecast" ? dataRows(rows, d) : count, data };
+    } catch (err) { problems.push(`${f.name}: ${err.message}`); }
+  }
+  renderImportSources(); refreshAsof();
+  msg.className = problems.length ? "msg err" : "msg";
+  msg.innerHTML = problems.length ? problems.map(esc).join("<br>") : `Ready. ${Object.keys(PENDING).length} file(s) recognised – press Apply.`;
+}
+$("#f-xlsx").addEventListener("change", (e) => { readFiles([...e.target.files]); e.target.value = ""; });
+const drop = $("#drop");
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => readFiles([...e.dataTransfer.files].filter((f) => /\.xlsx$/i.test(f.name))));
+$("#imp-apply").addEventListener("click", () => {
+  const next = stagedRaw();
+  const n = Object.values(PENDING).filter((p) => !p.remove).length, r = Object.values(PENDING).filter((p) => p.remove).length;
+  if (!next.sources.length) { RAW = null; PENDING = {}; resetFilters(); rebuild(); $("#m-import").classList.remove("on"); toast("All data cleared."); return; }
+  if (!next.orders) { const m = $("#imp-msg"); m.className = "msg err"; m.textContent = "The All Orders Report is required. Add it, or remove the other files to clear the panel."; return; }
+  next.asof = $("#imp-asof").value || asofOf(next);
+  next.loaded = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  RAW = next; PENDING = {}; resetFilters(); rebuild();
+  $("#m-import").classList.remove("on");
+  toast([n ? `Loaded ${n} file(s)` : "", r ? `removed ${r} file(s)` : ""].filter(Boolean).join(", ") + ". Panel updated.");
+});
+
+// ============================================================ user guide
+function riskGuide() {
+  const R = M && M.risk;
+  const intro = `<p>Delay risk is the estimated chance that an order starts <b>more than 30 days after its planned start</b>. It comes from a simple, transparent statistical model (logistic regression) that the panel <b>trains on your own data every time you import</b>: it looks at orders planned ${RISK_SPEC.windowFrom}–${RISK_SPEC.windowTo} days before the as-of date (old enough to know whether they started on time) and learns which order attributes go with late starts.</p>
+    <p>The model uses only facts known when the order is planned: <b>GEN supplier, package type, engine model, product line, fuel, outside plant, AC flag, cylinders</b> and whether the order needs a GEN. In each order panel the arrows show which of these push that order's risk up or down compared with a typical order.</p>
+    <table><thead><tr><th>Level</th><th>Rule</th></tr></thead><tbody>
+    <tr><td><span class="pill High">High</span></td><td>${Math.round(RISK_SPEC.bands.high_from * 100)}% or more</td></tr>
+    <tr><td><span class="pill Medium">Medium</span></td><td>${Math.round(RISK_SPEC.bands.low_below * 100)}% – ${Math.round(RISK_SPEC.bands.high_from * 100)}%</td></tr>
+    <tr><td><span class="pill Low">Low</span></td><td>below ${Math.round(RISK_SPEC.bands.low_below * 100)}%</td></tr></tbody></table>`;
+  if (!M) return intro + `<p class="muted">Import data to see how the model performs on your files and which values raise or lower risk.</p>`;
+  if (!R) return intro + `<p><b>Not available for the loaded data:</b> the All Orders file needs at least 60 orders planned in that window, with at least 10 late and 10 on-time starts.</p>`;
+  const ev = R.evaluation, pct = (x) => Math.round(x * 100) + "%", a = (x) => x == null ? "n/a" : x.toFixed(2);
+  const lvl = (f) => Object.entries(R.categorical[f].stats).filter(([, s]) => s.n >= RISK_SPEC.minFreq).sort((x, y) => y[1].late_rate - x[1].late_rate)
+    .map(([k, s]) => { const c = R.categorical[f].levels[k]; const d = (c === undefined ? R.categorical[f].infrequent : c) - R.categorical[f].baseline;
+      return `<tr><td>${esc(f === "supplier" ? (M.supNames[k] || (k === "NA" ? "Unknown" : k)) : k)}</td><td class="num">${fmt(s.n)}</td><td class="num">${pct(s.late_rate)}</td><td>${Math.abs(d) < 0.05 ? "neutral" : d > 0 ? "↑ raises" : "↓ lowers"}</td></tr>`; }).join("");
+  return intro + `<h3>Your current data</h3>
+    <p>Trained on <b>${fmt(ev.n)}</b> orders planned ${esc(ev.window)}, of which ${pct(ev.late_rate)} started late.</p>
+    <table><thead><tr><th>Level</th><th>Orders (cross-validated)</th><th>Actually started late</th></tr></thead><tbody>
+    ${["High", "Medium", "Low"].map((b) => `<tr><td><span class="pill ${b}">${b}</span></td><td class="num">${ev.band_late_rate[b].n}</td><td class="num">${pct(ev.band_late_rate[b].late_rate)}</td></tr>`).join("")}</tbody></table>
+    <p><b>How good is it?</b> Ranking accuracy (AUC; 0.5 = coin flip, 1.0 = perfect): <b>${a(ev.cv_auc)}</b> in 5-fold cross-validation and <b>${a(ev.temporal_auc)}</b> when trained on the earlier part of the window and tested on the later part. Use the score to <b>prioritise</b>, not as a promise – the training orders come from a single snapshot, where orders that started on time and already shipped may be missing.</p>
+    <h3>What raises or lowers risk</h3><p>Late-start rate by value in the training orders (values with at least ${RISK_SPEC.minFreq} orders):</p>
+    <table><thead><tr><th>GEN supplier</th><th>Orders</th><th>Late</th><th>Effect</th></tr></thead><tbody>${lvl("supplier")}</tbody></table>
+    <table><thead><tr><th>Package type</th><th>Orders</th><th>Late</th><th>Effect</th></tr></thead><tbody>${lvl("Type")}</tbody></table>
+    <table><thead><tr><th>Engine model</th><th>Orders</th><th>Late</th><th>Effect</th></tr></thead><tbody>${lvl("SLS_MDL")}</tbody></table>`;
+}
+function buildGuide() {
+  const S = [
+    ["start", "Getting started", `<p>The Control Panel answers one question every morning: <b>which engines are about to start without a generator (GEN), and what can we do about it?</b></p>
+      <ol class="steps"><li><b>Load the data.</b> The panel starts empty. Click <b>Import data</b> and drop in the latest Excel exports (see “Importing data”). Nothing is shown until you do.</li>
+      <li><b>Read the cards.</b> The five cards show today's GEN situation for every order that needs a GEN and has not started (overdue + next 8 weeks).</li>
+      <li><b>Drill down.</b> Click a card, a bar in the weekly chart, a risk level or a supplier. The table below filters instantly; everything else updates to match. Click again (or the ✕ on a filter chip) to remove the filter.</li>
+      <li><b>Open an order.</b> Click any row. The panel on the right explains why the order is flagged, lists the compatible GENs in TAD and shows what drives its delay risk.</li>
+      <li><b>Act.</b> Select a GEN for a short order and tag it (for example <i>Swap planned</i> or <i>Expedite supplier</i>). Add a note for the team.</li>
+      <li><b>Share.</b> Use <b>Export</b> to download the table (with your tags) or to share your tags & selections file with colleagues.</li></ol>`],
+    ["status", "GEN status", `<table><thead><tr><th>Status</th><th>Meaning</th><th>Rule</th></tr></thead><tbody>
+      <tr><td><span class="badge"><span class="ico red">!</span>Short of GEN</span></td><td>Needs action now</td><td>GEN not in TAD <b>and</b> the start is overdue, or within ${PARAMS.nearDays} days, or the GEN ETA is after the planned start.</td></tr>
+      <tr><td><span class="badge"><span class="ico orange">↻</span>GEN lent out</span></td><td>Its GEN was given to another engine in a swap</td><td>The order is the waiting side of a swap loop marked <i>Open</i> in the swap log and no replacement has been logged.</td></tr>
+      <tr><td><span class="badge"><span class="ico yellow">◷</span>In transit</span></td><td>Not received, no conflict yet</td><td>GEN not in TAD and the start is more than ${PARAMS.nearDays} days away.</td></tr>
+      <tr><td><span class="badge"><span class="ico green">✓</span>In stock</span></td><td>GEN is ready</td><td>The order's ESO appears in the TAD Report.</td></tr></tbody></table>
+      <p><b>Overdue starts</b> counts orders whose planned start (SCH_STRT_DT) has passed and that have not started (no STRT_DT). Many of them already have their GEN in stock – they are held up by something else, and their GENs could help other orders (see “Held by overdue order” below).</p>`],
+    ["options", "Finding a substitute GEN", `<p>For every <i>Short</i> or <i>Lent out</i> order the tool searches TAD stock with these configuration rules:</p>
+      <ul><li><b>Same GEN group:</b> the TAD Arrangement # must equal the order's Group Number in genforecast.</li>
+      <li><b>Same configuration:</b> if both orders have a parts list in genforecast, the Part/Attach Numbers must be identical (“Exact configuration match”). If one side has no parts list, the option is shown as “verify configuration before swapping”.</li>
+      <li><b>Not already used:</b> GENs that already appear as a New Serial in the swap log, and GENs whose owner engine has started, are excluded.</li></ul>
+      <table><thead><tr><th>Source (best first)</th><th>When it is offered</th></tr></thead><tbody>
+      <tr><td>Idle stock</td><td>The GEN's order is no longer open (cancelled or not in All Orders).</td></tr>
+      <tr><td>Borrow from later order</td><td>The owning order starts at least ${PARAMS.slackDays} days after this one. This creates a new swap loop.</td></tr>
+      <tr><td>Held by overdue order</td><td>The owning order is ${PARAMS.stuckDays}+ days past its planned start and has not started. Confirm it is on hold before taking its GEN.</td></tr></tbody></table>
+      <p><b>★ Suggested</b> is an automatic plan: orders are handled from the most urgent (earliest start, then highest risk) and each GEN is suggested only once. When you <b>Select</b> a GEN it is reserved for that order and the suggestions for all other orders are recalculated.</p>`],
+    ["risk", "How delay risk is scored", riskGuide()],
+    ["loops", "Open swap loops", `<p>When a GEN is taken from order B to complete order A, order B now waits for a replacement – an <b>open swap loop</b>. The <i>Open swap loops</i> tab lists every loop marked <i>Open</i> in the swap log:</p>
+      <ul><li><b>Urgent</b> – the waiting order starts within ${PARAMS.nearDays} days (or is overdue) and still has no replacement.</li><li><b>Watch</b> – starts within 30 days.</li><li><b>OK</b> – more than 30 days away.</li>
+      <li><b>Check status</b> – the data suggests the loop may already be closed (a replacement was logged, the order started, or it left All Orders). Update the swap log.</li></ul>`],
+    ["import", "Importing data", `<p>Click <b>Import data</b> and drop in the latest Excel exports – all four at once, or one at a time. The <b>All Orders Report is required</b>; the other three are optional, but without them some parts stay empty (the panel lists what is missing):</p>
+      <ul><li>No TAD Report → no “In stock” status and no substitute GENs.</li><li>No genforecast → no GEN supplier and no exact configuration matching.</li><li>No Gen Swap Summary → no “GEN lent out” status and no swap loops.</li></ul>
+      <table><thead><tr><th>File</th><th>Columns the tool needs</th></tr></thead><tbody>
+      <tr><td>All Orders Report</td><td>ESO, SCH_STRT_DT, STRT_DT, GEN, Prod (plus GEN_ETA, SLS_MDL, Type, FUEL, CYL, OUTPLANT, AC if available)</td></tr>
+      <tr><td>genforecast</td><td>Supplier Code, ESO, Basic Arrangement, Group Number, Part/Attach Number (plus Supplier Name for readable supplier names)</td></tr>
+      <tr><td>TAD Report</td><td>ESO, Serial #, Arrangement #, Receipt Date</td></tr>
+      <tr><td>Gen Swap Summary</td><td>Date, ESO, Original Serial #, New Serial #, Swap Loop (the combined sheet)</td></tr></tbody></table>
+      <p>Sheet names and extra sheets don't matter – the tool finds the sheet whose header row has these columns (if several match, it uses the one with the most columns). The <b>as-of date</b> is filled in with the latest start/receipt date in the files; change it if the exports are from another day. Everything is processed inside your browser; nothing is uploaded. Loaded data lasts until you close or reload the page – import the files again after reopening.</p>
+      <p><b>Replacing or removing files.</b> In the Import dialog:</p>
+      <ul><li>Dropping a new file of the same kind replaces the loaded one after you press <b>Apply</b>.</li>
+      <li><b>Remove</b> next to a file you just chose drops it before it is applied.</li>
+      <li><b>Remove</b> next to a <i>Loaded</i> file unloads that data source when you press <b>Apply</b> (press <b>Undo</b> to change your mind). Removing the All Orders Report requires removing everything, because the panel cannot work without it.</li>
+      <li><b>🗑 Clear all data</b> unloads every file at once and returns the panel to its empty start screen.</li></ul>
+      <p>Your tags, notes and GEN selections are never deleted by loading or removing files – they reappear when the same orders are loaded again.</p>`],
+    ["tags", "Tags, notes & saving", `<p>Tags, notes and GEN selections are saved automatically in <b>this browser on this computer</b>. They survive closing the page and re-importing data, but they are not shared automatically.</p>
+      <ul><li>To share: <b>Export › My tags & GEN selections</b>, then send the .json file. A colleague uses <b>Export › Load tags & GEN selections…</b> to merge it into their view.</li>
+      <li>To filter by a tag, type it in the search box.</li><li>The CSV export includes tags, notes and the selected or suggested GEN for every order in the current view.</li></ul>`],
+    ["limits", "Limitations", `<ul><li>All four inputs are snapshots. A GEN may have moved since the export – always confirm its current location and assignment before swapping.</li>
+      <li>The swap log is maintained by hand; loop status may lag reality.</li>
+      <li>Suggestions are candidates for the GEN SPE to review – priorities, physical condition and customer commitments still need human judgement.</li>
+      <li>Delay risk is a statistical estimate trained on the loaded snapshot; it helps rank orders but individual predictions can be wrong.</li></ul>
+      <p class="muted">Privacy: this page is a self-contained file with no data inside. Excel files you import are read and processed only in your browser and are never sent anywhere.</p>`],
+  ];
+  $("#guide").innerHTML = `<nav>${S.map(([id, t]) => `<a href="#g-${id}">${t}</a>`).join("")}</nav><div>${S.map(([id, t, h]) => `<h3 id="g-${id}">${t}</h3>${h}`).join("")}</div>`;
+  $$("#guide nav a").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); $(a.getAttribute("href")).scrollIntoView({ behavior: "smooth", block: "start" }); }));
+}
+$("#btn-guide").addEventListener("click", () => openModal("#m-guide"));
+addEventListener("resize", () => { if (M) renderChart(); });
+
+// ============================================================ boot
+buildGuide();
+rebuild();
+
+// self-test (analyst only): file:///.../gen_shortage_control_panel.html?selftest  with --allow-file-access-from-files
+// loads ../data/*.xlsx through the same importer a user would use, then shows them in the panel
+if (/[?&]selftest\b/.test(location.search)) {
+  (async () => {
+    const names = ["All Orders Report.xlsx", "genforecast.xlsx", "TAD Report.xlsx", "2026 Gen Swap Summary.xlsx"];
+    const load = (n) => new Promise((res, rej) => { const x = new XMLHttpRequest(); x.open("GET", "../data/" + encodeURIComponent(n)); x.responseType = "blob"; x.onload = () => res(new File([x.response], n)); x.onerror = () => rej(new Error("cannot read " + n)); x.send(); });
+    const out = document.createElement("script"); out.type = "application/json"; out.id = "selftest"; document.body.appendChild(out);
+    try {
+      const files = await Promise.all(names.map(load)); const raw = { sources: [] };
+      for (const f of files) { const wb = await openWorkbook(f); const d = await detect(wb); const rows = await wb.rows(d.sheet); const data = extract(d.kind, rows, d);
+        raw[d.kind === "genforecast" ? "gf" : d.kind] = data; raw.sources.push({ kind: d.kind, file: f.name, sheet: d.sheet.name, rows: d.kind === "genforecast" ? dataRows(rows, d) : (data.eso || data.serial || data.date).length }); }
+      raw.asof = asofOf(raw); raw.loaded = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+      const m2 = compute(raw); plan(m2, {});
+      out.textContent = JSON.stringify({ ok: true, asof: raw.asof, sources: raw.sources, kpi: kpiCounts(m2.orders),
+        orders: m2.orders.map((o) => [o.eso, o.st, o.d, o.risk.p == null ? null : Math.round(o.risk.p * 1e4) / 1e4, o.needy ? o.cands.length : null, o.rec]), loops: m2.loops.map((l) => [l.donor, l.urg]) });
+      RAW = raw; rebuild();
+    } catch (err) { out.textContent = JSON.stringify({ ok: false, error: String(err && err.stack || err) }); }
+    document.body.dataset.selftest = "done";
+  })();
+}
+})();
+</script>
+</body>
+</html>
