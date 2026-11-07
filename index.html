@@ -126,6 +126,7 @@ td.late { color: var(--critical); }
 .pill.High { border-color: var(--critical); color: var(--critical); }
 .pill.Medium { border-color: var(--warning); color: var(--ink); }
 .pill.Low { border-color: var(--good); color: var(--good); }
+.pill.Late { background: var(--critical); border-color: var(--critical); color: #fff; }
 .tag { display: inline-block; font-size: 11.5px; padding: 0 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); margin-right: 3px; }
 .pager { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-top: 10px; color: var(--ink-2); font-size: 13px; flex-wrap: wrap; }
 
@@ -206,7 +207,7 @@ footer.foot { color: var(--ink-3); font-size: 12px; margin-top: 16px; }
   <header class="top">
     <div>
       <h1>GEN Shortage Control Panel</h1>
-      <div class="asof">Data as of <b id="asof">—</b> · <span id="origin"></span> · <span class="muted">🔒 your files never leave this browser</span></div>
+      <div class="asof"><span title="The date the exports represent: the latest actual start (STRT_DT, All Orders) or receipt date (Receipt Date, TAD) found in the files. You can change it in the Import dialog.">Data as of <b id="asof">—</b> ⓘ</span> · <span id="origin"></span> · <span class="muted">🔒 your files never leave this browser</span></div>
     </div>
     <div class="top-actions">
       <button class="primary" id="btn-import" type="button">⬆ Import data</button>
@@ -705,6 +706,8 @@ function compute(raw) {
     else { rec.st = "yellow"; rec.why = `Starts in ${rec.d} days. The GEN has not been received yet, but there is no known conflict.`; }
     rec.week = rec.d < 0 ? "Overdue" : "W" + (Math.floor(rec.d / 7) + 1);
     rec.risk = riskOf(rec, R);
+    // the outcome of an overdue order is already known, so its forecast band is replaced by "Late now"
+    if (rec.d < 0) { rec.risk.planLevel = rec.risk.level; rec.risk.level = "Late now"; }
     rec.needy = rec.st === "red" || rec.st === "orange";
     orders.push(rec);
   }
@@ -872,11 +875,11 @@ function hbars(el, items, cur, onPick, color) {
 function renderBars() {
   if (!M.risk) { $("#riskbars").innerHTML = '<span class="muted">Not enough history in the loaded All Orders file to estimate delay risk.</span>'; }
   const rl = M.orders.filter((o) => pass(o, "risk"));
-  const rc = { High: 0, Medium: 0, Low: 0 }; rl.forEach((o) => { if (o.risk.level in rc) rc[o.risk.level]++; });
+  const rc = { High: 0, Medium: 0, Low: 0, "Late now": 0 }; rl.forEach((o) => { if (o.risk.level in rc) rc[o.risk.level]++; });
   if (M.risk)
-  hbars($("#riskbars"), ["High", "Medium", "Low"].map((k) => ({ key: k, label: `<span class="pill ${k}">${k}</span>`, n: rc[k] })), F.risk,
+  hbars($("#riskbars"), ["High", "Medium", "Low", "Late now"].map((k) => ({ key: k, label: riskPill(k), n: rc[k] })), F.risk,
     (k) => { F.risk = F.risk === k ? null : k; setView("orders"); PAGE = 0; renderAll(); },
-    (k) => ({ High: "var(--critical)", Medium: "var(--warning)", Low: "var(--good)" }[k]));
+    (k) => ({ High: "var(--critical)", Medium: "var(--warning)", Low: "var(--good)", "Late now": "var(--ink-3)" }[k]));
   const sl = M.orders.filter((o) => pass(o, "sup")); const sc = {};
   sl.forEach((o) => (sc[o.supName] = (sc[o.supName] || 0) + 1));
   const items = Object.entries(sc).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, n]) => ({ key: k, label: esc(k), n }));
@@ -900,14 +903,16 @@ function renderChips() {
 }
 
 const stRank = { red: 0, orange: 1, yellow: 2, green: 3 };
+const riskPill = (k) => `<span class="pill ${k === "Late now" ? "Late" : k}">${k}</span>`;
 const ORDER_COLS = [
   { key: "st", label: "Status", html: (o) => `<span class="badge"><span class="ico ${o.st}" aria-hidden="true">${ST[o.st].icon}</span>${ST[o.st].label}</span>`, sort: (o) => stRank[o.st] * 1e4 + o.d, csv: (o) => ST[o.st].label },
   { key: "eso", label: "ESO", html: (o) => `<b class="mono">${esc(o.eso)}</b>` },
-  { key: "sch", label: "Planned start", html: (o) => fmtDate(o.sch), sort: (o) => o.d },
-  { key: "d", label: "Start", cls: (o) => "num" + (o.d < 0 ? " late" : ""), html: (o) => daysText(o.d), csv: (o) => o.d },
+  { key: "sch", label: "Planned start", tip: "Planned production start date (SCH_STRT_DT in the All Orders Report)", html: (o) => fmtDate(o.sch), sort: (o) => o.d },
+  { key: "d", label: "Days to start", tip: "Days from the data as-of date to the planned start. Red = the planned start has already passed and the engine has not started yet.", cls: (o) => "num" + (o.d < 0 ? " late" : ""), html: (o) => daysText(o.d), csv: (o) => o.d },
   { key: "mdl", label: "Engine", html: (o) => esc(o.mdl) },
   { key: "supName", label: "GEN supplier", html: (o) => esc(o.supName) },
-  { key: "risk", label: "Delay risk", html: (o) => o.risk.p == null ? '<span class="muted">n/a</span>' : `<span class="pill ${o.risk.level}">${o.risk.level}</span> <span class="muted">${Math.round(o.risk.p * 100)}%</span>`, sort: (o) => o.risk.p ?? -1, csv: (o) => o.risk.p == null ? "n/a" : `${o.risk.level} (${Math.round(o.risk.p * 100)}%)` },
+  { key: "risk", label: "Delay risk", html: (o) => o.risk.p == null ? '<span class="muted">n/a</span>' : o.d < 0 ? riskPill("Late now") : `${riskPill(o.risk.level)} <span class="muted">${Math.round(o.risk.p * 100)}%</span>`,
+    sort: (o) => o.risk.p == null ? -1 : o.d < 0 ? 2 + -o.d / 1e4 : o.risk.p, csv: (o) => o.risk.p == null ? "n/a" : o.d < 0 ? `Late now (${-o.d} d)` : `${o.risk.level} (${Math.round(o.risk.p * 100)}%)` },
   { key: "opts", label: "GEN options", cls: () => "num", html: (o) => o.needy ? (o.nOpts ? fmt(o.nOpts) : '<span class="muted">none</span>') : '<span class="muted">—</span>', sort: (o) => o.needy ? o.nOpts : -1, csv: (o) => o.needy ? o.nOpts : "" },
   { key: "gen", label: "Selected GEN", html: (o) => o.chosen ? `<b class="mono">${esc(o.chosen)}</b> ✓` : o.rec ? `<span class="mono muted">${esc(o.rec)}</span> <span class="muted">(suggested)</span>` : "", sort: (o) => o.chosen ? 2 : o.rec ? 1 : 0, csv: (o) => o.chosen ? `${o.chosen} (selected)` : o.rec ? `${o.rec} (suggested)` : "" },
   { key: "tags", label: "Tags", html: (o) => tagsOf(o.eso).map((t) => `<span class="tag">${esc(t)}</span>`).join("") + ((ACTIONS[o.eso] && ACTIONS[o.eso].note) ? '<span class="muted" title="Has a note">✎</span>' : ""), sort: (o) => tagsOf(o.eso).join(","), csv: (o) => tagsOf(o.eso).join("; ") },
@@ -938,7 +943,7 @@ function renderTable() {
   rows = rows.slice().sort((a, b) => { const A = v(a), B = v(b); if (A == null && B == null) return 0; if (A == null) return 1; if (B == null) return -1; return (A > B ? 1 : A < B ? -1 : 0) * SORT.dir; });
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE)); PAGE = Math.min(PAGE, pages - 1);
   const slice = rows.slice(PAGE * PAGE_SIZE, (PAGE + 1) * PAGE_SIZE);
-  $("#tbl").innerHTML = `<thead><tr>${cols.map((x) => `<th data-k="${x.key}"${(SORT.key || cols[0].key) === x.key ? ` aria-sort="${SORT.dir > 0 ? "ascending" : "descending"}"` : ""}>${x.label}</th>`).join("")}</tr></thead>
+  $("#tbl").innerHTML = `<thead><tr>${cols.map((x) => `<th data-k="${x.key}"${x.tip ? ` title="${esc(x.tip)}"` : ""}${(SORT.key || cols[0].key) === x.key ? ` aria-sort="${SORT.dir > 0 ? "ascending" : "descending"}"` : ""}>${x.label}</th>`).join("")}</tr></thead>
     <tbody>${slice.map((r) => `<tr data-e="${esc(r.eso || r.donor)}" tabindex="0" class="${CURRENT && CURRENT === (r.eso || r.donor) ? "sel" : ""}">${cols.map((x) => `<td class="${x.cls ? x.cls(r) : ""}">${x.html(r)}</td>`).join("")}</tr>`).join("") ||
       `<tr><td colspan="${cols.length}" class="muted" style="cursor:default">No orders match these filters.</td></tr>`}</tbody>`;
   $$("#tbl th").forEach((th) => th.addEventListener("click", () => { const k = th.dataset.k; if ((SORT.key || cols[0].key) === k) SORT.dir = -SORT.dir; else { SORT.key = k; SORT.dir = 1; } renderTable(); }));
@@ -977,7 +982,9 @@ function renderDrawerBody(o) {
   const valLabel = (d) => d.f === "supplier" ? (M.supNames[d.v] || (d.v === "NA" ? "Unknown" : d.v)) : d.v;
   let opts = "";
   if (o.needy) {
-    const list = o.cands;
+    // the selected or suggested GEN goes first, so the planner sees the recommendation immediately
+    const pick = o.chosen || o.rec;
+    const list = pick ? [...o.cands.filter((t) => t.serial === pick), ...o.cands.filter((t) => t.serial !== pick)] : o.cands;
     opts = list.length ? list.slice(0, 25).map((t) => {
       const takenBy = M.reserved.get(t.serial); const mine = o.chosen === t.serial; const taken = takenBy && takenBy !== o.eso;
       const recd = o.rec === t.serial;
@@ -1000,8 +1007,11 @@ function renderDrawerBody(o) {
       <div class="addtag"><input type="text" id="new-tag" placeholder="Add your own tag" maxlength="40"><button type="button" id="add-tag">Add</button></div>
       <textarea id="note" placeholder="Note for the team (e.g. who is following up)">${esc(a.note || "")}</textarea>
       <div class="saved" id="saved">${a.ts ? "Last saved " + esc(a.ts) : "Saved automatically in this browser."}</div></section>
-    <section><h4>Delay risk</h4>${o.risk.p == null ? '<div class="muted">Not enough history in the loaded data to estimate delay risk.</div>' : `
-      <div><span class="pill ${o.risk.level}">${o.risk.level}</span> <b>${Math.round(o.risk.p * 100)}%</b> <span class="muted">estimated chance the start slips 30+ days</span></div>
+    <section><h4>Delay risk</h4>${o.risk.p == null ? '<div class="muted">Not enough history in the loaded data to estimate delay risk.</div>' : o.d < 0 ? `
+      <div>${riskPill("Late now")} <b>${-o.d} days past the planned start.</b> <span class="muted">The delay is already a fact, so no forecast is needed. Delay risk is only scored for orders that have not reached their planned start yet.</span></div>
+      <div class="muted" style="margin-top:6px">For reference: at planning time the model would have rated this order <b>${o.risk.planLevel} (${Math.round(o.risk.p * 100)}%)</b> because of:</div>
+      <ul class="drivers">${drv.map((d) => `<li><span class="arrow ${d.d > 0 ? "up" : "down"}">${d.d > 0 ? "↑" : "↓"}</span>${FEATURE_LABEL[d.f]}: <b>${esc(valLabel(d))}</b><span class="muted">${d.d > 0 ? "raises" : "lowers"} risk</span></li>`).join("") || "<li class='muted'>Close to a typical order.</li>"}</ul>` : `
+      <div>${riskPill(o.risk.level)} <b>${Math.round(o.risk.p * 100)}%</b> <span class="muted">estimated chance the start slips 30+ days</span></div>
       <ul class="drivers">${drv.map((d) => `<li><span class="arrow ${d.d > 0 ? "up" : "down"}">${d.d > 0 ? "↑" : "↓"}</span>${FEATURE_LABEL[d.f]}: <b>${esc(valLabel(d))}</b><span class="muted">${d.d > 0 ? "raises" : "lowers"} risk</span></li>`).join("") || "<li class='muted'>Close to a typical order.</li>"}</ul>`}</section>
     <section><h4>Order details</h4><div class="facts">
       <div><span>Planned start</span>${fmtDate(o.sch)}</div><div><span>Engine model</span>${esc(o.mdl || "—")}</div>
@@ -1152,7 +1162,9 @@ function riskGuide() {
     <table><thead><tr><th>Level</th><th>Rule</th></tr></thead><tbody>
     <tr><td><span class="pill High">High</span></td><td>${Math.round(RISK_SPEC.bands.high_from * 100)}% or more</td></tr>
     <tr><td><span class="pill Medium">Medium</span></td><td>${Math.round(RISK_SPEC.bands.low_below * 100)}% – ${Math.round(RISK_SPEC.bands.high_from * 100)}%</td></tr>
-    <tr><td><span class="pill Low">Low</span></td><td>below ${Math.round(RISK_SPEC.bands.low_below * 100)}%</td></tr></tbody></table>`;
+    <tr><td><span class="pill Low">Low</span></td><td>below ${Math.round(RISK_SPEC.bands.low_below * 100)}%</td></tr>
+    <tr><td><span class="pill Late">Late now</span></td><td>The planned start has already passed and the order has not started. The delay is a fact, so no forecast is shown (the order panel still shows how the model would have rated it at planning time).</td></tr></tbody></table>
+    <p><b>Important:</b> delay risk is a <i>planning-time forecast</i>. It is based only on order attributes, not on how late the order is today, so it is only meaningful for orders whose planned start is still ahead.</p>`;
   if (!M) return intro + `<p class="muted">Import data to see how the model performs on your files and which values raise or lower risk.</p>`;
   if (!R) return intro + `<p><b>Not available for the loaded data:</b> the All Orders file needs at least 60 orders planned in that window, with at least 10 late and 10 on-time starts.</p>`;
   const ev = R.evaluation, pct = (x) => Math.round(x * 100) + "%", a = (x) => x == null ? "n/a" : x.toFixed(2);
